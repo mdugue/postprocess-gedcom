@@ -26,6 +26,7 @@ import SortAscending from "./Icons/SortAscending"
 import SortDescending from "./Icons/SortDescending"
 import { Individual, Family } from "./worker"
 import Sort from "./Icons/Sort"
+import { format, isValid } from "date-fns"
 
 const DataWorker = new Worker()
 const dataWorker = Comlink.wrap<import("./worker").WorkerType>(DataWorker)
@@ -463,9 +464,27 @@ function App() {
                         }
                       return individual
                     })
-                    .filter(Boolean),
+                    .filter(filterFalsy)
+                    .map((individual) => {
+                      const { birth, death } = individual
+                      return {
+                        ...individual,
+                        birth:
+                          birth && isValid(birth)
+                            ? format(birth, "yyyy-MM-dd")
+                            : undefined,
+                        death:
+                          death && isValid(death)
+                            ? format(death, "yyyy-MM-dd")
+                            : undefined,
+                      }
+                    }),
                   families: rootData?.families.map((family) => ({
                     ...family,
+                    marriage:
+                      family.marriage && isValid(family.marriage)
+                        ? format(family.marriage, "yyyy-MM-dd")
+                        : undefined,
                     children: family.children.filter(
                       (childId) => !deleteKeysMap[childId]
                     ),
@@ -504,3 +523,9 @@ function App() {
 }
 
 export default App
+
+function filterFalsy<T>(
+  value: T
+): value is Exclude<T, false | null | undefined | "" | 0> {
+  return Boolean(value)
+}
