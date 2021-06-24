@@ -1,16 +1,9 @@
 module.exports = {
-  future: {
-    removeDeprecatedGapUtilities: true,
-    purgeLayersByDefault: true,
-  },
+  mode: "jit",
   purge: ["./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
-    extend: {
-      colors: {
-        "accent-1": "#ffff00",
-      },
-    },
+    extend: {},
   },
   variants: {},
   plugins: [],
-};
+}
