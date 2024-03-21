@@ -4,22 +4,21 @@ import {
   Cell,
   Column,
   Row,
-  useBlockLayout,
-  useFilters,
-  useGlobalFilter,
-  usePagination,
-  useResizeColumns,
-  useSortBy,
-  useTable,
-} from "react-table"
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  flexRender,
+  createColumnHelper,
+  getFilteredRowModel,
+  ColumnFiltersState,
+  Table,
+  getFacetedUniqueValues,
+} from "@tanstack/react-table"
 import { useMap } from "react-use"
-/* eslint-disable import/no-webpack-loader-syntax */
-// @ts-ignore
-import Worker from "worker-loader!./worker" // inline loader
 import "./App.css"
 import Delete from "./Delete"
 import FileDrop from "./FileDrop"
-import GlobalSearchFilter from "./GlobalSearchFilter"
 import PaginationControls from "./PaginationControls"
 import { readFile } from "./readFile"
 import SortAscending from "./Icons/SortAscending"
@@ -28,8 +27,11 @@ import { Individual, Family } from "./worker"
 import Sort from "./Icons/Sort"
 import { format, isValid } from "date-fns"
 
-const DataWorker = new Worker()
-const dataWorker = Comlink.wrap<import("./worker").WorkerType>(DataWorker)
+const dataWorker = Comlink.wrap<import("./worker").WorkerType>(
+  new Worker(new URL("./worker", import.meta.url), { type: "module" })
+)
+
+const columnHelper = createColumnHelper<Individual>()
 
 type TransformIndividual =
   | { type: "delete"; hint: string }
@@ -84,82 +86,66 @@ function App() {
   )
 
   const columns = useMemo(
-    () =>
-      [
-        { Header: "id", accessor: "id", width: 64 },
-        {
-          Header: "name",
-          accessor: "name",
-          width: 400,
-        },
-        {
-          Header: "sex",
-          accessor: "sex",
-          width: 64,
-        },
-        {
-          Header: "birth",
-          accessor: "birth",
-          Cell: ({ value }) => (value ? value.toLocaleDateString() : " – "),
-          sortType: sortByBirth,
-        },
-        {
-          Header: "death",
-          accessor: "death",
-          Cell: ({ value }) => (value ? value.toLocaleDateString() : " – "),
-          sortType: sortByDeath,
-        },
-        {
-          Header: "families head",
-          accessor: "headOfFamilies",
-        },
-        {
-          Header: "",
-          id: "actions",
-          Cell: (data: Cell<Individual>) => (
-            <span>
-              <button
-                className="hover:bg-gray-50 p-1 rounded"
-                onClick={() => {
-                  setTransformation(data.row.original.id, {
-                    type: "delete",
-                    hint: `${
-                      data.row.original.name
-                    }, ${data.row.original.birth?.toDateString()}`,
-                  })
-                }}
-              >
-                <Delete />
-              </button>
-            </span>
-          ),
-        },
-      ] as Column<Individual>[],
+    () => [
+      { header: "id", accessorKey: "id", size: 64 },
+      columnHelper.accessor("name", {
+        header: "Name",
+        size: 400,
+        filterFn: "includesString",
+      }),
+      {
+        header: "Geschlecht",
+        accessorKey: "sex",
+      },
+      columnHelper.accessor("birth", {
+        header: "birth",
+        cell: (info) => info.getValue()?.toLocaleDateString() || " – ",
+        sortingFn: sortByBirth,
+      }),
+      columnHelper.accessor("death", {
+        header: "death",
+        cell: (info) => info.getValue()?.toLocaleDateString() || " – ",
+        sortingFn: sortByDeath,
+      }),
+      {
+        header: "families head",
+        accessorKey: "headOfFamilies",
+      },
+      {
+        header: "",
+        id: "actions",
+        cell: (data: Cell<Individual>) => (
+          <span>
+            <button
+              className="hover:bg-gray-50 p-1 rounded"
+              onClick={() => {
+                setTransformation(data.row.original.id, {
+                  type: "delete",
+                  hint: `${
+                    data.row.original.name
+                  }, ${data.row.original.birth?.toDateString()}`,
+                })
+              }}
+            >
+              <Delete />
+            </button>
+          </span>
+        ),
+      },
+    ],
     [setTransformation, sortByBirth, sortByDeath]
   )
 
-  const {
-    getTableProps,
-    getTableBodyProps,
-    headerGroups,
-    prepareRow,
-    page,
-    // pagination
-    canPreviousPage,
-    canNextPage,
-    pageOptions,
-    pageCount,
-    gotoPage,
-    nextPage,
-    previousPage,
-    setPageSize,
-    // filter
-    preGlobalFilteredRows,
-    setGlobalFilter,
-    state: { pageIndex, pageSize, globalFilter },
-  } = useTable(
+  const [pagination, setPagination] = useState({
+    pageIndex: 0, //initial page index
+    pageSize: 10, //default page size
+  })
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+
+  const table = useReactTable(
     {
-      // @ts-expect-error
+      enableColumnResizing: true,
+      columnResizeMode: "onChange",
       updateMe: (id: string, data: { [key: string]: any }, hint: string) => {
         const existingTransformation = transformations[id]
         const existingTransformationData =
@@ -180,12 +166,12 @@ function App() {
       },
       columns,
       data: rootData?.individuals || [],
-      initialState: { pageSize: 20 },
+      /* initialState: { pageSize: 20 }, */
       defaultColumn: {
-        Cell: (cell: Cell<Individual>) => {
+        cell: (cell) => {
           return (
             <input
-              defaultValue={cell.value}
+              defaultValue={cell.getValue()}
               style={{
                 width: "100%",
                 background: "inherit",
@@ -212,14 +198,31 @@ function App() {
           )
         },
       },
-    },
-    useFilters,
+      getFacetedUniqueValues: getFacetedUniqueValues(),
+      getCoreRowModel: getCoreRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      onPaginationChange: setPagination,
+      state: { pagination, columnFilters },
+      getSortedRowModel: getSortedRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      onColumnFiltersChange: setColumnFilters,
+    }
+    /* useFilters,
     useGlobalFilter,
     useSortBy,
     usePagination,
     useBlockLayout,
-    useResizeColumns
+    useResizeColumns */
   )
+
+  const {
+    // filter
+    /* preGlobalFilteredRows, */
+    setGlobalFilter,
+    getHeaderGroups,
+    getRowModel,
+    /* state: { pageIndex, pageSize, globalFilter }, */
+  } = table
 
   return (
     <div className="grid grid-cols-4 gap-4 m-8">
@@ -227,14 +230,7 @@ function App() {
         Transform Gedcom
       </h1>
       <div className="grid gap-4 col-span-3">
-        <h2 className="text-xl mt-4 text-gray-500">
-          Gedcom data{" "}
-          <GlobalSearchFilter
-            preGlobalFilteredRows={preGlobalFilteredRows}
-            globalFilter={globalFilter}
-            setGlobalFilter={setGlobalFilter}
-          />
-        </h2>
+        <h2 className="text-xl mt-4 text-gray-500">Gedcom data </h2>
         {rootData == null ? (
           <FileDrop
             title="add gedcom file here"
@@ -242,101 +238,129 @@ function App() {
             accept=".ged"
           />
         ) : (
-          <div
-            className="table-auto bg-white shadow-lg rounded-xl overflow-hidden text-gray-600"
-            {...getTableProps()}
+          <table
+            className="bg-white shadow-lg rounded-xl text-gray-600"
+            style={{
+              width: table.getCenterTotalSize(),
+            }}
           >
-            <div>
+            <thead>
               {
                 // Loop over the header rows
-                headerGroups.map((headerGroup) => (
+                getHeaderGroups().map((headerGroup) => (
                   // Apply the header row props
-                  <div {...headerGroup.getHeaderGroupProps()}>
+                  <tr id={headerGroup.id} key={headerGroup.id}>
                     {
                       // Loop over the headers in each row
-                      headerGroup.headers.map((column) => (
+                      headerGroup.headers.map((header) => (
                         // Apply the header cell props
-                        <div {...column.getHeaderProps()} className="py-1 px-2">
-                          <div className="flex items-center">
-                            {column.render("Header")}
-                            <span
-                              className="pl-1"
-                              {...column.getSortByToggleProps()}
-                            >
-                              {column.isSorted ? (
-                                column.isSortedDesc ? (
-                                  <SortDescending />
-                                ) : (
-                                  <SortAscending />
-                                )
-                              ) : column.canSort ? (
-                                <Sort />
+                        <th
+                          id={header.id}
+                          key={header.id}
+                          className="py-1 px-2 relative"
+                          style={{ width: header.getSize() }}
+                        >
+                          <button
+                            type="button"
+                            className="flex items-center capitalize"
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                            <span className="pl-1">
+                              {header.column.getIsSorted() === "desc" ? (
+                                <SortDescending />
+                              ) : header.column.getIsSorted() === "asc" ? (
+                                <SortAscending />
                               ) : (
                                 <></>
                               )}
                             </span>
-                            <div
-                              {...column.getResizerProps()}
-                              className={`w-1 h-4 ml-auto mr-1 bg-gray-100 ${
-                                column.isResizing ? "bg-gray-200" : ""
-                              }`}
-                            />
-                          </div>
-                        </div>
+                          </button>
+                          <div
+                            className="bg-gray-100 w-1 rounded h-full basis-4 absolute right-0 top-0 cursor-col-resize"
+                            {...{
+                              onDoubleClick: () => header.column.resetSize(),
+                              onMouseDown: header.getResizeHandler(),
+                              onTouchStart: header.getResizeHandler(),
+
+                              style: {
+                                transform:
+                                  false && header.column.getIsResizing()
+                                    ? `translateX(${
+                                        (table.options.columnResizeDirection ===
+                                        "rtl"
+                                          ? -1
+                                          : 1) *
+                                        (table.getState().columnSizingInfo
+                                          .deltaOffset ?? 0)
+                                      }px)`
+                                    : "",
+                              },
+                            }}
+                          />
+                          {header.column.getCanFilter() ? (
+                            <div>
+                              <Filter column={header.column} table={table} />
+                            </div>
+                          ) : null}
+                        </th>
                       ))
                     }
-                  </div>
+                  </tr>
                 ))
               }
-            </div>
+            </thead>
             {/* Apply the table body props */}
-            <div {...getTableBodyProps()}>
-              {page.map((row, i) => {
+            <tbody /* {...getTableBodyProps()} */>
+              {getRowModel().rows.map((row, i) => {
                 // Prepare the row for display
-                prepareRow(row)
+                /* prepareRow(row) */
                 const isDeleted =
                   transformations[row.original.id]?.type === "delete"
                 const isUpdated =
                   transformations[row.original.id]?.type === "update"
                 return (
                   // Apply the row props
-                  <div
-                    {...row.getRowProps()}
+                  <tr
+                    id={row.id}
+                    key={row.id}
                     className={`border-l-8 border-white ${
                       isDeleted && "border-red-400 text-gray-300"
                     } ${isUpdated && "border-green-400 text-green-700"}`}
                   >
                     {
                       // Loop over the rows cells
-                      row.cells.map((cell) => {
+                      row.getVisibleCells().map((cell) => {
                         // Apply the cell props
                         return (
-                          <div {...cell.getCellProps()} className="py-1 px-2">
-                            {
-                              // Render the cell contents
-                              cell.render("Cell")
-                            }
-                          </div>
+                          <td id={cell.id} key={cell.id} className="py-1 px-2">
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </td>
                         )
                       })
                     }
-                  </div>
+                  </tr>
                 )
               })}
-            </div>
-          </div>
+            </tbody>
+          </table>
         )}
         <PaginationControls
-          canNextPage={canNextPage}
-          canPreviousPage={canPreviousPage}
-          setPageSize={setPageSize}
-          pageCount={pageCount}
-          gotoPage={gotoPage}
-          nextPage={nextPage}
-          pageIndex={pageIndex}
-          pageOptions={pageOptions}
-          pageSize={pageSize}
-          previousPage={previousPage}
+          canNextPage={table.getCanNextPage()}
+          canPreviousPage={table.getCanPreviousPage()}
+          setPageSize={table.setPageSize}
+          pageCount={table.getPageCount()}
+          gotoPage={table.setPageIndex}
+          nextPage={table.nextPage}
+          pageIndex={table.getState().pagination.pageIndex}
+          pageSize={table.getState().pagination.pageSize}
+          previousPage={table.previousPage}
         />
       </div>
       <div>
@@ -395,7 +419,7 @@ function App() {
                   </h2>
                   {type?.type === "update" &&
                     Object.entries(type.data).map(([key, newValue]) => (
-                      <div className="flex items-center text-xs">
+                      <div className="flex items-center text-xs" key={key}>
                         <div className="text-green-900">
                           {
                             // @ts-expect-error
@@ -519,6 +543,117 @@ function App() {
         </button>
       </div>
     </div>
+  )
+}
+
+function Filter({
+  column,
+  table,
+}: {
+  column: Column<any, unknown>
+  table: Table<any>
+}) {
+  const firstValue = table
+    .getPreFilteredRowModel()
+    .flatRows[0]?.getValue(column.id)
+
+  const columnFilterValue = column.getFilterValue()
+
+  const sortedUniqueValues = React.useMemo(
+    () =>
+      typeof firstValue === "number"
+        ? []
+        : Array.from(column.getFacetedUniqueValues().keys()).sort(),
+    [column.getFacetedUniqueValues()]
+  )
+
+  return typeof firstValue === "number" ? (
+    <div>
+      <div className="flex space-x-2">
+        <DebouncedInput
+          type="number"
+          min={Number(column.getFacetedMinMaxValues()?.[0] ?? "")}
+          max={Number(column.getFacetedMinMaxValues()?.[1] ?? "")}
+          value={(columnFilterValue as [number, number])?.[0] ?? ""}
+          onChange={(value) =>
+            column.setFilterValue((old: [number, number]) => [value, old?.[1]])
+          }
+          placeholder={`Min ${
+            column.getFacetedMinMaxValues()?.[0]
+              ? `(${column.getFacetedMinMaxValues()?.[0]})`
+              : ""
+          }`}
+          className="w-24 border shadow rounded"
+        />
+        <DebouncedInput
+          type="number"
+          min={Number(column.getFacetedMinMaxValues()?.[0] ?? "")}
+          max={Number(column.getFacetedMinMaxValues()?.[1] ?? "")}
+          value={(columnFilterValue as [number, number])?.[1] ?? ""}
+          onChange={(value) =>
+            column.setFilterValue((old: [number, number]) => [old?.[0], value])
+          }
+          placeholder={`Max ${
+            column.getFacetedMinMaxValues()?.[1]
+              ? `(${column.getFacetedMinMaxValues()?.[1]})`
+              : ""
+          }`}
+          className="w-24 border shadow rounded"
+        />
+      </div>
+      <div className="h-1" />
+    </div>
+  ) : (
+    <>
+      <datalist id={column.id + "list"}>
+        {sortedUniqueValues.slice(0, 5000).map((value: any) => (
+          <option value={value} key={value} />
+        ))}
+      </datalist>
+      <DebouncedInput
+        type="text"
+        value={(columnFilterValue ?? "") as string}
+        onChange={(value) => column.setFilterValue(value)}
+        placeholder={`Search... (${column.getFacetedUniqueValues().size})`}
+        className="w-full border rounded min-w-32 font-medium"
+        list={column.id + "list"}
+      />
+      <div className="h-1" />
+    </>
+  )
+}
+
+// A debounced input react component
+function DebouncedInput({
+  value: initialValue,
+  onChange,
+  debounce = 500,
+  ...props
+}: {
+  value: string | number
+  onChange: (value: string | number) => void
+  debounce?: number
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange">) {
+  const [value, setValue] = React.useState(initialValue)
+
+  React.useEffect(() => {
+    setValue(initialValue)
+  }, [initialValue])
+
+  React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      onChange(value)
+    }, debounce)
+
+    return () => clearTimeout(timeout)
+  }, [value])
+
+  return (
+    <input
+      {...props}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+    />
   )
 }
 

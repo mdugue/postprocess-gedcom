@@ -5,7 +5,6 @@ export default function PaginationControls(props: {
   nextPage: () => void
   pageCount: number
   pageIndex: number
-  pageOptions: number[]
   pageSize: number
   previousPage: () => void
   setPageSize: (size: number) => void
@@ -17,7 +16,6 @@ export default function PaginationControls(props: {
     nextPage,
     pageCount,
     pageIndex,
-    pageOptions,
     pageSize,
     previousPage,
     setPageSize,
@@ -57,7 +55,7 @@ export default function PaginationControls(props: {
       <span>
         Page{" "}
         <strong>
-          {pageIndex + 1} of {pageOptions.length}
+          {pageIndex + 1} of {pageCount}
         </strong>
       </span>
       <span>
