@@ -14,6 +14,7 @@ import {
   ColumnFiltersState,
   Table,
   getFacetedUniqueValues,
+  ColumnDef,
 } from "@tanstack/react-table"
 import { useMap } from "react-use"
 import "./App.css"
@@ -86,53 +87,54 @@ function App() {
   )
 
   const columns = useMemo(
-    () => [
-      { header: "id", accessorKey: "id", size: 64 },
-      columnHelper.accessor("name", {
-        header: "Name",
-        size: 400,
-        filterFn: "includesString",
-      }),
-      {
-        header: "Geschlecht",
-        accessorKey: "sex",
-      },
-      columnHelper.accessor("birth", {
-        header: "birth",
-        cell: (info) => info.getValue()?.toLocaleDateString() || " – ",
-        sortingFn: sortByBirth,
-      }),
-      columnHelper.accessor("death", {
-        header: "death",
-        cell: (info) => info.getValue()?.toLocaleDateString() || " – ",
-        sortingFn: sortByDeath,
-      }),
-      {
-        header: "families head",
-        accessorKey: "headOfFamilies",
-      },
-      {
-        header: "",
-        id: "actions",
-        cell: (data: Cell<Individual>) => (
-          <span>
-            <button
-              className="hover:bg-gray-50 p-1 rounded"
-              onClick={() => {
-                setTransformation(data.row.original.id, {
-                  type: "delete",
-                  hint: `${
-                    data.row.original.name
-                  }, ${data.row.original.birth?.toDateString()}`,
-                })
-              }}
-            >
-              <Delete />
-            </button>
-          </span>
-        ),
-      },
-    ],
+    () =>
+      [
+        { header: "id", accessorKey: "id", size: 64 },
+        columnHelper.accessor("name", {
+          header: "Name",
+          size: 400,
+          filterFn: "includesString",
+        }),
+        {
+          header: "Geschlecht",
+          accessorKey: "sex",
+        },
+        columnHelper.accessor("birth", {
+          header: "birth",
+          cell: (info) => info.getValue()?.toLocaleDateString() || " – ",
+          sortingFn: sortByBirth,
+        }),
+        columnHelper.accessor("death", {
+          header: "death",
+          cell: (info) => info.getValue()?.toLocaleDateString() || " – ",
+          sortingFn: sortByDeath,
+        }),
+
+        {
+          header: "families head",
+          accessorKey: "headOfFamilies",
+        },
+        {
+          id: "actions",
+          cell: (data) => (
+            <span>
+              <button
+                className="hover:bg-gray-50 p-1 rounded"
+                onClick={() => {
+                  setTransformation(data.row.original.id, {
+                    type: "delete",
+                    hint: `${
+                      data.row.original.name
+                    }, ${data.row.original.birth?.toDateString()}`,
+                  })
+                }}
+              >
+                <Delete />
+              </button>
+            </span>
+          ),
+        },
+      ] satisfies ColumnDef<Individual>[],
     [setTransformation, sortByBirth, sortByDeath]
   )
 
@@ -142,87 +144,74 @@ function App() {
   })
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
-  const table = useReactTable(
-    {
-      enableColumnResizing: true,
-      columnResizeMode: "onChange",
-      updateMe: (id: string, data: { [key: string]: any }, hint: string) => {
-        const existingTransformation = transformations[id]
-        const existingTransformationData =
-          existingTransformation?.type === "update"
-            ? existingTransformation.data
-            : null
+  const updateMe = (id: string, data: { [key: string]: any }, hint: string) => {
+    const existingTransformation = transformations[id]
+    const existingTransformationData =
+      existingTransformation?.type === "update"
+        ? existingTransformation.data
+        : null
 
-        const newTransformationData: Partial<Individual> = {
-          ...existingTransformationData,
-          ...data,
-        } as const
+    const newTransformationData: Partial<Individual> = {
+      ...existingTransformationData,
+      ...data,
+    } as const
 
-        setTransformation(id, {
-          type: "update",
-          data: newTransformationData,
-          hint,
-        })
+    setTransformation(id, {
+      type: "update",
+      data: newTransformationData,
+      hint,
+    })
+  }
+
+  const table = useReactTable({
+    enableColumnResizing: true,
+    columnResizeMode: "onChange",
+
+    columns,
+    data: rootData?.individuals || [],
+    /* initialState: { pageSize: 20 }, */
+    defaultColumn: {
+      cell: (cell) => {
+        return (
+          <input
+            defaultValue={cell.getValue()}
+            style={{
+              width: "100%",
+              background: "inherit",
+              fontWeight: "inherit",
+              textDecoration: "inherit",
+              textDecorationColor: "inherit",
+              textDecorationStyle: "inherit",
+              textDecorationThickness: "inherit",
+              textDecorationLine: "inherit",
+            }}
+            onChange={(e) => {
+              console.log("on change", cell.column, cell.column.id)
+              const id = cell.row.original.id
+
+              updateMe(
+                id,
+                { [cell.column.id]: e.target.value },
+                `${
+                  cell.row.original.name
+                }, ${cell.row.original.birth?.toDateString()}`
+              )
+            }}
+          />
+        )
       },
-      columns,
-      data: rootData?.individuals || [],
-      /* initialState: { pageSize: 20 }, */
-      defaultColumn: {
-        cell: (cell) => {
-          return (
-            <input
-              defaultValue={cell.getValue()}
-              style={{
-                width: "100%",
-                background: "inherit",
-                fontWeight: "inherit",
-                textDecoration: "inherit",
-                textDecorationColor: "inherit",
-                textDecorationStyle: "inherit",
-                textDecorationThickness: "inherit",
-                textDecorationLine: "inherit",
-              }}
-              onChange={(e) => {
-                const id = cell.row.original.id
+    },
+    getFacetedUniqueValues: getFacetedUniqueValues(),
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onPaginationChange: setPagination,
+    state: { pagination, columnFilters },
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+  })
 
-                // @ts-expect-error
-                cell.updateMe(
-                  id,
-                  { [String(cell.column.Header)]: e.target.value },
-                  `${
-                    cell.row.original.name
-                  }, ${cell.row.original.birth?.toDateString()}`
-                )
-              }}
-            />
-          )
-        },
-      },
-      getFacetedUniqueValues: getFacetedUniqueValues(),
-      getCoreRowModel: getCoreRowModel(),
-      getPaginationRowModel: getPaginationRowModel(),
-      onPaginationChange: setPagination,
-      state: { pagination, columnFilters },
-      getSortedRowModel: getSortedRowModel(),
-      getFilteredRowModel: getFilteredRowModel(),
-      onColumnFiltersChange: setColumnFilters,
-    }
-    /* useFilters,
-    useGlobalFilter,
-    useSortBy,
-    usePagination,
-    useBlockLayout,
-    useResizeColumns */
-  )
-
-  const {
-    // filter
-    /* preGlobalFilteredRows, */
-    setGlobalFilter,
-    getHeaderGroups,
-    getRowModel,
-    /* state: { pageIndex, pageSize, globalFilter }, */
-  } = table
+  const { getHeaderGroups, getRowModel } = table
 
   return (
     <div className="grid grid-cols-4 gap-4 m-8">
@@ -238,118 +227,130 @@ function App() {
             accept=".ged"
           />
         ) : (
-          <table
-            className="bg-white shadow-lg rounded-xl text-gray-600"
-            style={{
-              width: table.getCenterTotalSize(),
-            }}
-          >
-            <thead>
-              {
-                // Loop over the header rows
-                getHeaderGroups().map((headerGroup) => (
-                  // Apply the header row props
-                  <tr id={headerGroup.id} key={headerGroup.id}>
-                    {
-                      // Loop over the headers in each row
-                      headerGroup.headers.map((header) => (
-                        // Apply the header cell props
-                        <th
-                          id={header.id}
-                          key={header.id}
-                          className="py-1 px-2 relative"
-                          style={{ width: header.getSize() }}
-                        >
-                          <button
-                            type="button"
-                            className="flex items-center capitalize"
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                            <span className="pl-1">
-                              {header.column.getIsSorted() === "desc" ? (
-                                <SortDescending />
-                              ) : header.column.getIsSorted() === "asc" ? (
-                                <SortAscending />
-                              ) : (
-                                <></>
-                              )}
-                            </span>
-                          </button>
-                          <div
-                            className="bg-gray-100 w-1 rounded h-full basis-4 absolute right-0 top-0 cursor-col-resize"
-                            {...{
-                              onDoubleClick: () => header.column.resetSize(),
-                              onMouseDown: header.getResizeHandler(),
-                              onTouchStart: header.getResizeHandler(),
+          <div className="border rounded-md bg-white">
+            <div className="relative w-full overflow-auto">
+              <table
+                className="text-gray-600 "
+                style={{
+                  width: table.getCenterTotalSize(),
+                }}
+              >
+                <thead>
+                  {
+                    // Loop over the header rows
+                    getHeaderGroups().map((headerGroup) => (
+                      // Apply the header row props
+                      <tr id={headerGroup.id} key={headerGroup.id}>
+                        {
+                          // Loop over the headers in each row
+                          headerGroup.headers.map((header) => (
+                            // Apply the header cell props
+                            <th
+                              id={header.id}
+                              key={header.id}
+                              className="py-1 px-2 relative"
+                              style={{ width: header.getSize() }}
+                            >
+                              <button
+                                type="button"
+                                className="flex items-center capitalize"
+                                onClick={header.column.getToggleSortingHandler()}
+                              >
+                                {flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                                <span className="pl-1">
+                                  {header.column.getIsSorted() === "desc" ? (
+                                    <SortDescending />
+                                  ) : header.column.getIsSorted() === "asc" ? (
+                                    <SortAscending />
+                                  ) : (
+                                    <></>
+                                  )}
+                                </span>
+                              </button>
+                              <div
+                                className="bg-gray-100 w-1 rounded h-full basis-4 absolute right-0 top-0 cursor-col-resize"
+                                {...{
+                                  onDoubleClick: () =>
+                                    header.column.resetSize(),
+                                  onMouseDown: header.getResizeHandler(),
+                                  onTouchStart: header.getResizeHandler(),
 
-                              style: {
-                                transform:
-                                  false && header.column.getIsResizing()
-                                    ? `translateX(${
-                                        (table.options.columnResizeDirection ===
-                                        "rtl"
-                                          ? -1
-                                          : 1) *
-                                        (table.getState().columnSizingInfo
-                                          .deltaOffset ?? 0)
-                                      }px)`
-                                    : "",
-                              },
-                            }}
-                          />
-                          {header.column.getCanFilter() ? (
-                            <div>
-                              <Filter column={header.column} table={table} />
-                            </div>
-                          ) : null}
-                        </th>
-                      ))
-                    }
-                  </tr>
-                ))
-              }
-            </thead>
-            {/* Apply the table body props */}
-            <tbody /* {...getTableBodyProps()} */>
-              {getRowModel().rows.map((row, i) => {
-                // Prepare the row for display
-                /* prepareRow(row) */
-                const isDeleted =
-                  transformations[row.original.id]?.type === "delete"
-                const isUpdated =
-                  transformations[row.original.id]?.type === "update"
-                return (
-                  // Apply the row props
-                  <tr
-                    id={row.id}
-                    key={row.id}
-                    className={`border-l-8 border-white ${
-                      isDeleted && "border-red-400 text-gray-300"
-                    } ${isUpdated && "border-green-400 text-green-700"}`}
-                  >
-                    {
-                      // Loop over the rows cells
-                      row.getVisibleCells().map((cell) => {
-                        // Apply the cell props
-                        return (
-                          <td id={cell.id} key={cell.id} className="py-1 px-2">
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </td>
-                        )
-                      })
-                    }
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                                  style: {
+                                    transform:
+                                      false && header.column.getIsResizing()
+                                        ? `translateX(${
+                                            (table.options
+                                              .columnResizeDirection === "rtl"
+                                              ? -1
+                                              : 1) *
+                                            (table.getState().columnSizingInfo
+                                              .deltaOffset ?? 0)
+                                          }px)`
+                                        : "",
+                                  },
+                                }}
+                              />
+                              {header.column.getCanFilter() ? (
+                                <div>
+                                  <Filter
+                                    column={header.column}
+                                    table={table}
+                                  />
+                                </div>
+                              ) : null}
+                            </th>
+                          ))
+                        }
+                      </tr>
+                    ))
+                  }
+                </thead>
+                {/* Apply the table body props */}
+                <tbody /* {...getTableBodyProps()} */>
+                  {getRowModel().rows.map((row, i) => {
+                    // Prepare the row for display
+                    /* prepareRow(row) */
+                    const isDeleted =
+                      transformations[row.original.id]?.type === "delete"
+                    const isUpdated =
+                      transformations[row.original.id]?.type === "update"
+                    return (
+                      // Apply the row props
+                      <tr
+                        id={row.id}
+                        key={row.id}
+                        className={`border-l-8 border-white ${
+                          isDeleted && "border-red-400 text-gray-300"
+                        } ${isUpdated && "border-green-400 text-green-700"}`}
+                      >
+                        {
+                          // Loop over the rows cells
+                          row.getVisibleCells().map((cell) => {
+                            // Apply the cell props
+                            return (
+                              <td
+                                id={cell.id}
+                                key={cell.id}
+                                className="py-1 px-2"
+                              >
+                                {flexRender(
+                                  cell.column.columnDef.cell,
+                                  cell.getContext()
+                                )}
+                              </td>
+                            )
+                          })
+                        }
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
         <PaginationControls
           canNextPage={table.getCanNextPage()}
@@ -605,11 +606,11 @@ function Filter({
     </div>
   ) : (
     <>
-      <datalist id={column.id + "list"}>
+      {/* <datalist id={column.id + "list"}>
         {sortedUniqueValues.slice(0, 5000).map((value: any) => (
-          <option value={value} key={value} />
+          <option value={value} key={column.id + value} />
         ))}
-      </datalist>
+      </datalist> */}
       <DebouncedInput
         type="text"
         value={(columnFilterValue ?? "") as string}

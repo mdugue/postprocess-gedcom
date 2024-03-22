@@ -33,7 +33,7 @@
     "prestart": "npm run build:tailwind",
     "prebuild": "npm run build:tailwind",
     "tsc": "tsc",
-    "start": "vite",
+    "dev": "vite",
     "build": "vite build",
     "serve": "vite preview"
   },
