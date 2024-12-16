@@ -1,4 +1,22 @@
-export default function PaginationControls(props: {
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react"
+import { memo } from "react"
+
+export const PaginationControls = memo(function PaginationControls(props: {
   canNextPage: boolean
   canPreviousPage: boolean
   gotoPage: (page: number) => void
@@ -22,35 +40,39 @@ export default function PaginationControls(props: {
   } = props
   return (
     <div className="flex justify-between place-items-center">
-      <div>
-        <button
-          className="py-1 px-2 mr-2 shadow rounded bg-white"
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="icon"
           onClick={() => gotoPage(0)}
           disabled={!canPreviousPage}
         >
-          {"<<"}
-        </button>
-        <button
-          className="py-1 px-2 mr-2 shadow rounded bg-white"
+          <ChevronsLeft />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
           onClick={() => previousPage()}
           disabled={!canPreviousPage}
         >
-          {"<"}
-        </button>
-        <button
-          className="py-1 px-2 mr-2 shadow rounded bg-white"
+          <ChevronLeft />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
           onClick={() => nextPage()}
           disabled={!canNextPage}
         >
-          {">"}
-        </button>
-        <button
-          className="py-1 px-2 mr-2 shadow rounded bg-white"
+          <ChevronRight />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
           onClick={() => gotoPage(pageCount - 1)}
           disabled={!canNextPage}
         >
-          {">>"}
-        </button>
+          <ChevronsRight />
+        </Button>
       </div>
       <span>
         Page{" "}
@@ -58,10 +80,12 @@ export default function PaginationControls(props: {
           {pageIndex + 1} of {pageCount}
         </strong>
       </span>
-      <span>
-        go to page
-        <input
-          className="mx-1 py-1 px-2 shadow rounded"
+      <span className="flex gap-2 items-baseline">
+        <Label htmlFor="page-input" className="whitespace-nowrap">
+          Go to page
+        </Label>
+        <Input
+          id="page-input"
           type="number"
           defaultValue={pageIndex + 1}
           onChange={(e) => {
@@ -71,19 +95,27 @@ export default function PaginationControls(props: {
           style={{ width: "100px" }}
         />
       </span>
-      <select
-        value={pageSize}
-        className="py-1 px-2 shadow rounded"
-        onChange={(e) => {
-          setPageSize(Number(e.target.value))
+      <Select
+        value={pageSize.toString()}
+        onValueChange={(value) => {
+          setPageSize(Number(value))
         }}
       >
-        {[10, 20, 30, 40, 50].map((pageSize) => (
-          <option key={pageSize} value={pageSize}>
-            Show {pageSize}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger className="py-1 px-2 shadow rounded max-w-[10rem]">
+          <SelectValue placeholder={`Show ${pageSize}`} />
+        </SelectTrigger>
+        <SelectContent>
+          {pageSizeOptions.map((pageSize) => (
+            <SelectItem key={pageSize} value={pageSize.toString()}>
+              Show {pageSize}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   )
-}
+})
+
+export default PaginationControls
+
+const pageSizeOptions = [10, 20, 30, 40, 50]

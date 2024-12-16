@@ -1,37 +1,54 @@
-import { useDropzone } from "react-dropzone"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { UploadIcon } from "lucide-react"
+import { type Accept, useDropzone } from "react-dropzone"
 
 function FileDrop(props: {
-  accept?: string
+  accept?: Accept
   title: string
   onDrop: (files: File[]) => void
 }) {
   const { accept, title, onDrop } = props
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept,
-  })
+  const { getRootProps, getInputProps, isDragActive, fileRejections } =
+    useDropzone({
+      onDrop,
+      accept,
+    })
+
+  const fileRejectionItems = fileRejections.map(({ file, errors }) => (
+    <li key={file.path}>
+      {file.path} - {file.size} bytes
+      <ul>
+        {errors.map((e) => (
+          <li key={e.code}>{e.message}</li>
+        ))}
+      </ul>
+    </li>
+  ))
 
   return (
     <div
       {...getRootProps()}
-      className="border-gray-300 text-gray-600 border-2 border-dashed px-3 py-5 cursor-pointer rounded-lg text-center hover:bg-white flex place-items-center justify-center"
+      className="border-gray-300 text-gray-600 border border-dashed px-3 py-5 cursor-pointer rounded-lg text-center hover:bg-white flex place-items-center justify-center"
     >
       <input {...getInputProps()} />
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        className="w-8 h-8 text-gray-400 pr-1"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-        />
-      </svg>
-      {isDragActive ? <p>Drop the files here ...</p> : <p>{title}</p>}
+
+      <Alert className="my-32 mx-4 max-w-screen-sm">
+        <UploadIcon className="h-4 w-4" />
+        <AlertTitle>
+          {isDragActive
+            ? "Drop the files here ..."
+            : fileRejectionItems.length > 0
+            ? "File type not supported"
+            : title}
+        </AlertTitle>
+        <AlertDescription>
+          {fileRejectionItems.length > 0 ? (
+            <ul>{fileRejectionItems}</ul>
+          ) : (
+            "You can add files by dropping them here or clicking to select"
+          )}
+        </AlertDescription>
+      </Alert>
     </div>
   )
 }

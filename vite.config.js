@@ -3,12 +3,21 @@ import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import { comlink } from "vite-plugin-comlink"
 
+const ReactCompilerConfig = {
+  /* ... */
+}
+
 export default defineConfig(() => {
   return {
     /* build: {
       outDir: "build",
     }, */
-    plugins: [comlink(), react()],
+    plugins: [
+      "babel-plugin-react-compiler",
+      ReactCompilerConfig,
+      comlink(),
+      react(),
+    ],
     worker: {
       plugins: () => [comlink()],
     },

@@ -65,11 +65,11 @@ function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
   return value != null
 }
 
-const dataWorker = {
+export const dataWorker = {
   async loadData(file: Blob) {
     const gedcomData = await readFile(file)
     const data = parseGedcom.parse(gedcomData)
-    // @ts-expect-error
+    // @ts-expect-error Not sure why this is not typed
     const compact: Parent = parseGedcom.compact(data) as Parent
 
     const individuals: Individual[] = compact.children
