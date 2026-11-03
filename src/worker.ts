@@ -1,5 +1,5 @@
 import * as Comlink from "comlink"
-import { parse } from "date-fns"
+import { isValid, parse } from "date-fns"
 import * as parseGedcom from "parse-gedcom"
 import { readFile } from "./readFile"
 
@@ -65,6 +65,12 @@ function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
   return value != null
 }
 
+function parseGedcomDate(value: string | undefined): Date | undefined {
+  if (value == null || value === "") return undefined
+  const parsed = parse(value, "d LLL y", referenceDate)
+  return isValid(parsed) ? parsed : undefined
+}
+
 export const dataWorker = {
   async loadData(file: Blob) {
     const gedcomData = await readFile(file)
@@ -77,16 +83,11 @@ export const dataWorker = {
       .map((item) => {
         const { data } = item
         if (data == null) return null
-        const birth = data["BIRTH/DATE"]
-        const death = data["DEATH/DATE"]
-
         return {
           id: data.xref_id.replace("@I", "").replace("@", ""),
           name: data.NAME.replace(/\//g, "") || "no name",
-          birth:
-            birth != null ? parse(birth, "d LLL y", referenceDate) : undefined,
-          death:
-            death != null ? parse(death, "d LLL y", referenceDate) : undefined,
+          birth: parseGedcomDate(data["BIRTH/DATE"]),
+          death: parseGedcomDate(data["DEATH/DATE"]),
           sex: data.SEX,
           headOfFamilies: [
             data["@FAMILY_SPOUSE"],
@@ -113,7 +114,6 @@ export const dataWorker = {
       .map((item) => {
         const { data } = item
         if (data == null) return null
-        const marriageDateString = data["MARRIAGE/DATE"]
         return {
           id: data.xref_id.replace("@F", "").replace("@", ""),
           children: [data["@CHILD"], ...(data["+@CHILD"] || [])]
@@ -122,9 +122,7 @@ export const dataWorker = {
           parents: [data["@HUSBAND"], data["@WIFE"]]
             .filter(notEmpty)
             .map((node) => node.replace("@I", "").replace("@", "")),
-          marriage: marriageDateString
-            ? new Date(marriageDateString)
-            : undefined,
+          marriage: parseGedcomDate(data["MARRIAGE/DATE"]),
         }
       })
       .filter(notEmpty)
