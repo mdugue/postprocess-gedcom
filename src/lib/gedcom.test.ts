@@ -30,4 +30,17 @@ describe("parseGedcom", () => {
     expect(family?.children).toEqual(["3"]);
     expect(family?.marriage?.getFullYear()).toBe(1975);
   });
+
+  test("rejects files without any records", () => {
+    expect(() => parseGedcom("")).toThrow("keine Personen oder Familien");
+    expect(() => parseGedcom("0 HEAD\n0 TRLR\n")).toThrow(
+      "keine Personen oder Familien"
+    );
+  });
+
+  test("rejects malformed records instead of dropping them", () => {
+    expect(() =>
+      parseGedcom("0 INDI\n1 NAME Ohne /Id/\n0 @I2@ INDI\n1 NAME Mit /Id/\n")
+    ).toThrow("xref_id");
+  });
 });

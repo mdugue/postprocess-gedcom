@@ -48,7 +48,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAppTable } from "@/lib/record-table";
+import { setColumnVisible, useAppTable } from "@/lib/record-table";
 import type { Features, RecordTableMeta } from "@/lib/record-table";
 
 interface RecordRow {
@@ -160,7 +160,7 @@ const RecordCards = <T extends RecordRow>({
                   className={cn(
                     "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2",
                     change === "delete" &&
-                      "text-muted-foreground line-through [&_input]:line-through"
+                      "text-muted-foreground [&_input:not(:placeholder-shown)]:line-through [&>div>*:not(:has(input:placeholder-shown))]:line-through"
                   )}
                 >
                   {cells.flatMap((cell) =>
@@ -213,7 +213,7 @@ const ColumnsMenu = <T extends RecordRow>({
                   checked={column.getIsVisible()}
                   key={column.id}
                   onCheckedChange={(visible) => {
-                    column.toggleVisibility(visible);
+                    setColumnVisible(column, visible);
                   }}
                 >
                   {String(column.columnDef.header)}

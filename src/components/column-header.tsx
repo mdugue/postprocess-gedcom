@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { TableHead } from "@/components/ui/table";
+import { setColumnVisible } from "@/lib/record-table";
 import type { Features } from "@/lib/record-table";
 
 const ariaSort = { asc: "ascending", desc: "descending" } as const;
@@ -81,9 +82,22 @@ const ColumnMenu = <T extends object>({
               <ArrowDownIcon data-icon="inline-start" />
               Absteigend
             </Button>
+            {/* Stays focusable so keyboard focus survives clearing the sort. */}
+            <Button
+              disabled={sorted === false}
+              focusableWhenDisabled
+              onClick={() => {
+                column.clearSorting();
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              <ChevronsUpDownIcon data-icon="inline-start" />
+              Sortierung aufheben
+            </Button>
             <Button
               onClick={() => {
-                column.toggleVisibility(false);
+                setColumnVisible(column, false);
               }}
               size="sm"
               variant="ghost"

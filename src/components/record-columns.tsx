@@ -39,13 +39,15 @@ type IndividualCellProps = Pick<
   "row" | "table"
 >;
 
-const usePendingIndividual = ({ row, table }: IndividualCellProps) => {
+// Fields of a deleted record stay locked, since an edit would cancel the deletion.
+const pendingIndividual = ({ row, table }: IndividualCellProps) => {
   const { actions, transformations } = getTableMeta(table);
   const individual = row.original;
   const pending = transformations.individuals[individual.id];
 
   return {
     individual,
+    isDeleted: pending?.type === "delete",
     pending: pending?.type === "update" ? pending.data : undefined,
     update: (data: IndividualUpdate) => {
       actions.updateIndividual(individual.id, data, individualHint(individual));
@@ -54,11 +56,12 @@ const usePendingIndividual = ({ row, table }: IndividualCellProps) => {
 };
 
 const NameCell = (props: IndividualCellProps) => {
-  const { individual, pending, update } = usePendingIndividual(props);
+  const { individual, isDeleted, pending, update } = pendingIndividual(props);
 
   return (
     <Input
       aria-label={`Name von ${individual.name}`}
+      disabled={isDeleted}
       onChange={(event) => {
         update({ name: event.target.value });
       }}
@@ -69,17 +72,16 @@ const NameCell = (props: IndividualCellProps) => {
 };
 
 const SexCell = (props: IndividualCellProps) => {
-  const { individual, pending, update } = usePendingIndividual(props);
+  const { individual, isDeleted, pending, update } = pendingIndividual(props);
   const value = pending?.sex ?? individual.sex ?? "";
 
-  // Keeps uncommon values from the source file selectable instead of hiding them.
-  const options = SEX_OPTIONS.includes(value)
-    ? SEX_OPTIONS
-    : [...SEX_OPTIONS, value];
+  // Keeps uncommon source values selectable, also after changing them.
+  const options = [...new Set([...SEX_OPTIONS, individual.sex ?? "", value])];
 
   return (
     <NativeSelect
       aria-label={`Geschlecht von ${individual.name}`}
+      disabled={isDeleted}
       onChange={(event) => {
         update({ sex: event.target.value });
       }}
@@ -100,10 +102,11 @@ const IndividualDateCell = ({
   label,
   ...props
 }: IndividualCellProps & { field: "birth" | "death"; label: string }) => {
-  const { individual, pending, update } = usePendingIndividual(props);
+  const { individual, isDeleted, pending, update } = pendingIndividual(props);
 
   return (
     <DatePicker
+      disabled={isDeleted}
       label={`${label} von ${individual.name}`}
       onChange={(value) => {
         update({ [field]: value });
@@ -211,6 +214,7 @@ const MarriageCell = ({
 
   return (
     <DatePicker
+      disabled={pending?.type === "delete"}
       label={`Hochzeit von ${familyTitle(gedcom, family)}`}
       onChange={(marriage) => {
         actions.updateFamily(

@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { useState } from "react";
 import { de } from "react-day-picker/locale";
@@ -15,9 +15,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { parseDisplayDate, toDisplayDate } from "@/lib/transformations";
-
-const ISO_DATE_FORMAT = "yyyy-MM-dd";
+import {
+  formatIsoDate,
+  parseDisplayDate,
+  toDisplayDate,
+} from "@/lib/transformations";
 
 // Genealogical records reach far back, so the year dropdown has to as well.
 const START_MONTH = new Date(1500, 0);
@@ -28,10 +30,12 @@ const END_MONTH = new Date(new Date().getFullYear(), 11);
  * discarded on blur. Takes and reports `yyyy-MM-dd`, as stored in transformation files.
  */
 export const DatePicker = ({
+  disabled,
   label,
   onChange,
   value,
 }: {
+  disabled?: boolean;
   label: string;
   onChange: (value: string | null) => void;
   value: string | undefined;
@@ -47,6 +51,7 @@ export const DatePicker = ({
       <InputGroupInput
         aria-invalid={isInvalid}
         aria-label={label}
+        disabled={disabled}
         onBlur={() => {
           setDraft(undefined);
         }}
@@ -56,7 +61,7 @@ export const DatePicker = ({
           const typed = parseDisplayDate(target.value);
 
           if (typed) {
-            onChange(format(typed, ISO_DATE_FORMAT));
+            onChange(formatIsoDate(typed));
           } else if (target.value === "" && date) {
             onChange(null);
           }
@@ -70,6 +75,7 @@ export const DatePicker = ({
             render={
               <InputGroupButton
                 aria-label={`Kalender für ${label} öffnen`}
+                disabled={disabled}
                 size="icon-xs"
               />
             }
@@ -85,7 +91,7 @@ export const DatePicker = ({
               mode="single"
               onSelect={(selected) => {
                 if (selected) {
-                  onChange(format(selected, ISO_DATE_FORMAT));
+                  onChange(formatIsoDate(selected));
                   setOpen(false);
                 }
               }}

@@ -57,7 +57,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
 const tableRowVariants = {
   default: "",
   deleted:
-    "bg-removed/5 text-muted-foreground line-through [&_input]:line-through [&>td:first-child]:shadow-[inset_2px_0_0_var(--removed)]",
+    "bg-removed/5 text-muted-foreground [&>td:not(:has(input:placeholder-shown))]:line-through [&_input:not(:placeholder-shown)]:line-through [&>td:first-child]:shadow-[inset_2px_0_0_var(--removed)]",
   updated:
     "bg-success/5 [&>td:first-child]:shadow-[inset_2px_0_0_var(--success)]",
 } as const;

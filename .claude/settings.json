@@ -1,14 +1,5 @@
 {
-  "permissions": {
-    "allow": [
-      "ClaudeInChromeDomain(localhost:3457)",
-      "ClaudeInChromeDomain(localhost:3456)",
-      "mcp__claude-in-chrome__tabs_context_mcp",
-      "Bash(timeout 90 bun test)",
-      "Bash(timeout 90 bun run typecheck)",
-      "Bash(echo \"exit: $?\")"
-    ]
-  },
+  
   "hooks": {
     "PostToolUse": [
       {

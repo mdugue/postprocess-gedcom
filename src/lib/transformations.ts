@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { Family, Gedcom, Individual } from "@/lib/gedcom";
 
-const EXPORT_DATE_FORMAT = "yyyy-MM-dd";
+const ISO_DATE_FORMAT = "yyyy-MM-dd";
 const DISPLAY_DATE_FORMAT = "dd.MM.yyyy";
 const DISPLAY_DATE_INPUT_FORMAT = "d.M.yyyy";
 const COMPLETE_DISPLAY_DATE = /^\d{1,2}\.\d{1,2}\.\d{4}$/u;
@@ -91,8 +91,10 @@ export const parseDisplayDate = (text: string) => {
   return COMPLETE_DISPLAY_DATE.test(text) && isValid(date) ? date : undefined;
 };
 
+export const formatIsoDate = (date: Date) => format(date, ISO_DATE_FORMAT);
+
 export const toIsoDate = (date: Date | undefined) =>
-  date && format(date, EXPORT_DATE_FORMAT);
+  date && formatIsoDate(date);
 
 /** The edited date if the update touches it, otherwise the original one. */
 export const effectiveDate = <K extends string>(
@@ -159,7 +161,8 @@ export const matchesTransformation = (
 
 const exportIndividual = (
   individual: Individual,
-  transform: IndividualTransform | undefined
+  transform: IndividualTransform | undefined,
+  isFamilyDeleted: (id: string) => boolean
 ) => {
   const update = transform?.type === "update" ? transform.data : undefined;
 
@@ -168,6 +171,9 @@ const exportIndividual = (
     ...update,
     birth: effectiveDate(update, "birth", individual.birth),
     death: effectiveDate(update, "death", individual.death),
+    headOfFamilies: individual.headOfFamilies.filter(
+      (id) => !isFamilyDeleted(id)
+    ),
   };
 };
 
@@ -186,23 +192,30 @@ const exportFamily = (
   parents: family.parents.filter((id) => !isDeleted(id)),
 });
 
-/** Applies the transformations and removes references to deleted individuals. */
+/** Applies the transformations and removes references to deleted records. */
 export const buildExport = (
   gedcom: Gedcom,
   { families, individuals }: Transformations
 ) => {
   const isDeleted = (id: string) => individuals[id]?.type === "delete";
+  const isFamilyDeleted = (id: string) => families[id]?.type === "delete";
 
   return {
     families: gedcom.families.flatMap((family) =>
-      families[family.id]?.type === "delete"
+      isFamilyDeleted(family.id)
         ? []
         : [exportFamily(family, families[family.id], isDeleted)]
     ),
     individuals: gedcom.individuals.flatMap((individual) =>
       isDeleted(individual.id)
         ? []
-        : [exportIndividual(individual, individuals[individual.id])]
+        : [
+            exportIndividual(
+              individual,
+              individuals[individual.id],
+              isFamilyDeleted
+            ),
+          ]
     ),
   };
 };

@@ -68,7 +68,20 @@ const familyNodeSchema = z
     parents: [data["@HUSBAND"], data["@WIFE"]].filter((id) => id !== undefined),
   }));
 
-const compactRootSchema = z.object({ children: z.array(z.unknown()) });
+const compactRootSchema = z.object({
+  children: z.array(z.looseObject({ type: z.string() })),
+});
+
+/** Fails on malformed records, since skipping them would drop them from the export. */
+const parseRecords = <T extends z.ZodType>(schema: T, records: unknown[]) => {
+  const result = z.array(schema).safeParse(records);
+
+  if (!result.success) {
+    throw new Error(z.prettifyError(result.error));
+  }
+
+  return result.data;
+};
 
 export type Individual = z.output<typeof individualNodeSchema>;
 
@@ -84,18 +97,20 @@ export interface Gedcom {
 export const parseGedcom = (source: string): Gedcom => {
   const { children } = compactRootSchema.parse(compact(parse(source)));
 
-  // Each schema only matches its own record type, so other nodes are skipped.
-  const individuals = children.flatMap((child) => {
-    const node = individualNodeSchema.safeParse(child);
+  const individuals = parseRecords(
+    individualNodeSchema,
+    children.filter(({ type }) => type === "INDI")
+  );
 
-    return node.success ? [node.data] : [];
-  });
+  const families = parseRecords(
+    familyNodeSchema,
+    children.filter(({ type }) => type === "FAM")
+  );
 
-  const families = children.flatMap((child) => {
-    const node = familyNodeSchema.safeParse(child);
-
-    return node.success ? [node.data] : [];
-  });
+  // A loaded GEDCOM replaces the drop target, so an empty one would be a dead end.
+  if (individuals.length === 0 && families.length === 0) {
+    throw new Error("Die Datei enthält keine Personen oder Familien.");
+  }
 
   return {
     families,

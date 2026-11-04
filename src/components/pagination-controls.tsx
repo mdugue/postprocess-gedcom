@@ -116,7 +116,7 @@ export const PaginationControls = ({
 
                 const page = Number(value);
 
-                if (value !== "" && page >= 1 && page <= pageCount) {
+                if (Number.isInteger(page) && page >= 1 && page <= pageCount) {
                   gotoPage(page - 1);
                 }
               }}

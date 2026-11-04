@@ -16,7 +16,7 @@ import {
   sortFn_text,
   tableFeatures,
 } from "@tanstack/react-table";
-import type { Table } from "@tanstack/react-table";
+import type { Column, Table } from "@tanstack/react-table";
 
 import type { TransformationActions } from "@/hooks/use-transformations";
 import { toDisplayDate } from "@/lib/transformations";
@@ -27,7 +27,10 @@ export interface RecordTableMeta {
   transformations: Transformations;
 }
 
-/** Matches what a cell shows, so dates match `12.06.1975` and not their raw form. */
+/**
+ * Matches the displayed format, so dates match `12.06.1975` and not their raw form.
+ * Compares source values: rows must not vanish while their pending edit is typed.
+ */
 const matchesDisplayedText = (
   row: { getValue: (columnId: string) => Date | string | undefined },
   columnId: string,
@@ -60,10 +63,30 @@ export type Features = typeof features;
 
 export const { createAppColumnHelper, useAppTable } = createTableHook({
   columnResizeMode: "onChange",
+  // Many records lack dates, which must not push the dated ones out of view.
+  defaultColumn: { sortUndefined: "last" },
   features,
+  // The default only searches string and number columns, which would skip dates.
+  getColumnCanGlobalFilter: () => true,
   getRowId: (row: { id: string }) => row.id,
   globalFilterFn: "matchesDisplayedText",
 });
+
+/** A hidden column has no controls left, so its filter and sort must not stay active unseen. */
+export const setColumnVisible = <T extends object>(
+  column: Column<Features, T>,
+  visible: boolean
+) => {
+  if (!visible && column.getIsFiltered()) {
+    column.setFilterValue(undefined);
+  }
+
+  if (!visible && column.getIsSorted() !== false) {
+    column.clearSorting();
+  }
+
+  column.toggleVisibility(visible);
+};
 
 export const getTableMeta = <T extends object>(
   table: Table<Features, T>

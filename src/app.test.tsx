@@ -26,6 +26,11 @@ const textInput = (label: string) => {
   return input;
 };
 
+const renderedNames = () =>
+  screen
+    .getAllByLabelText(/^Name von /u)
+    .map((input) => input.getAttribute("aria-label"));
+
 const loadFixture = async () => {
   const user = userEvent.setup();
 
@@ -262,6 +267,173 @@ describe("App", () => {
 
     // "mar" appears in the raw date string of March births, but not in any cell.
     expect(screen.queryByLabelText("Name von Anna Muster")).toBeNull();
+  });
+
+  test("searches dates by their displayed text", async () => {
+    const user = await loadFixture();
+
+    await user.type(
+      within(screen.getByRole("tabpanel")).getByLabelText(
+        "Alle Spalten durchsuchen"
+      ),
+      "03.03.1950"
+    );
+
+    expect(screen.getByLabelText("Name von Anna Muster")).toBeDefined();
+    expect(screen.queryByLabelText("Name von Clara Muster")).toBeNull();
+  });
+
+  test("clears a sort from the column menu", async () => {
+    const user = await loadFixture();
+
+    const original = renderedNames();
+
+    await user.click(
+      within(screen.getByRole("tabpanel")).getByRole("button", { name: "Name" })
+    );
+    await user.click(await screen.findByRole("button", { name: "Absteigend" }));
+
+    expect(renderedNames()).toEqual(original.toReversed());
+
+    await user.click(
+      screen.getByRole("button", { name: "Sortierung aufheben" })
+    );
+
+    expect(renderedNames()).toEqual(original);
+  });
+
+  test("keeps records without a date last in both sort directions", async () => {
+    const user = await loadFixture();
+
+    await user.click(
+      within(screen.getByRole("tabpanel")).getByRole("button", {
+        name: "Geburt",
+      })
+    );
+    await user.click(await screen.findByRole("button", { name: "Absteigend" }));
+
+    expect(renderedNames()[0]).toBe("Name von Anna Muster");
+
+    await user.click(screen.getByRole("button", { name: "Aufsteigend" }));
+
+    expect(renderedNames()[0]).toBe("Name von Anna Muster");
+  });
+
+  test("hiding a column removes its filter", async () => {
+    const user = await loadFixture();
+
+    await user.click(
+      within(screen.getByRole("tabpanel")).getByRole("button", { name: "Name" })
+    );
+    await user.type(await screen.findByLabelText("Name filtern"), "clara");
+
+    expect(screen.queryByLabelText("Geschlecht von Anna Muster")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Ausblenden" }));
+
+    expect(screen.queryByLabelText("Name von Clara Muster")).toBeNull();
+    expect(screen.getByLabelText("Geschlecht von Anna Muster")).toBeDefined();
+  });
+
+  test("hiding a column removes its sort", async () => {
+    const user = await loadFixture();
+    const original = renderedNames();
+
+    await user.click(
+      within(screen.getByRole("tabpanel")).getByRole("button", { name: "Name" })
+    );
+    await user.click(await screen.findByRole("button", { name: "Absteigend" }));
+
+    expect(renderedNames()).toEqual(original.toReversed());
+
+    await user.click(screen.getByRole("button", { name: "Ausblenden" }));
+
+    expect(screen.queryByLabelText("Name von Anna Muster")).toBeNull();
+    expect(
+      screen
+        .getAllByLabelText(/^Geschlecht von /u)
+        .map((input) => input.getAttribute("aria-label"))
+    ).toEqual([
+      "Geschlecht von Anna Muster",
+      "Geschlecht von Bernd Muster",
+      "Geschlecht von Clara Muster",
+    ]);
+  });
+
+  test("keeps an uncommon source value selectable after changing it", async () => {
+    const user = await loadFixture();
+    const sex = screen.getByLabelText("Geschlecht von Anna Muster");
+
+    await user.selectOptions(sex, "M");
+
+    const options = within(sex)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+
+    expect(options).toContain("W");
+    expect(options).toContain("M");
+  });
+
+  test("locks the fields of a deleted person until undone", async () => {
+    const user = await loadFixture();
+
+    await user.click(
+      screen.getByRole("button", { name: "Anna Muster löschen" })
+    );
+
+    expect(textInput("Name von Anna Muster").disabled).toBe(true);
+    expect(textInput("Geburt von Anna Muster").disabled).toBe(true);
+    expect(
+      screen
+        .getByLabelText("Geschlecht von Anna Muster")
+        .hasAttribute("disabled")
+    ).toBe(true);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Änderung an Anna Muster zurücknehmen",
+      })
+    );
+
+    expect(textInput("Name von Anna Muster").disabled).toBe(false);
+    expect(textInput("Geburt von Anna Muster").disabled).toBe(false);
+  });
+
+  test("locks the marriage date of a deleted family", async () => {
+    const user = await loadFixture();
+
+    await user.click(screen.getByRole("tab", { name: "Familien" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Bernd Muster & Anna Muster löschen",
+      })
+    );
+
+    expect(textInput("Hochzeit von Bernd Muster & Anna Muster").disabled).toBe(
+      true
+    );
+    expect(
+      screen
+        .getByRole("button", {
+          name: "Kalender für Hochzeit von Bernd Muster & Anna Muster öffnen",
+        })
+        .hasAttribute("disabled")
+    ).toBe(true);
+  });
+
+  test("keeps the upload prompt for a GEDCOM without records", async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.upload(
+      fileInput(),
+      new File(["0 HEAD\n0 TRLR\n"], "leer.ged", { type: "text/ged" })
+    );
+
+    expect(
+      await screen.findByText("Datei konnte nicht geladen werden")
+    ).toBeDefined();
+    expect(screen.getByText("GEDCOM-Datei hinzufügen")).toBeDefined();
   });
 
   test("shows cards and tucks changes into a sheet on phones", async () => {

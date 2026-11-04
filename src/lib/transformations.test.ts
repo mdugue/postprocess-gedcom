@@ -70,6 +70,7 @@ describe("buildExport", () => {
     });
 
     expect(deleted.families).toEqual([]);
+    expect(deleted.individuals[0]?.headOfFamilies).toEqual([]);
   });
 });
 
