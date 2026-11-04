@@ -1,5 +1,6 @@
 import { isValid, parse as parseDate } from "date-fns";
-import { readGedcom } from "read-gedcom";
+// The ESM build has circular imports that crash under Bun's dev server.
+import { readGedcom } from "read-gedcom/dist/cjs/index.js";
 
 const GEDCOM_DATE_FORMAT = "d LLL y";
 const referenceDate = new Date();
@@ -59,9 +60,22 @@ const readDate = (value: string | null | undefined) => {
     : { date: undefined, raw: value ?? undefined };
 };
 
+const isUtf16 = ([first, second]: Uint8Array) =>
+  (first === 0xff && second === 0xfe) || (first === 0xfe && second === 0xff);
+
+/**
+ * Family Tree Maker pads some `TITL` lines with NUL bytes, which the parser
+ * rejects. They carry no data, except in UTF-16, where they are part of the text.
+ */
+const removeNulBytes = (source: ArrayBuffer) => {
+  const bytes = new Uint8Array(source);
+
+  return isUtf16(bytes) ? source : bytes.filter((byte) => byte !== 0).buffer;
+};
+
 /** Takes the raw bytes, since the library detects the encoding of older files. */
 export const parseGedcom = (source: ArrayBuffer): Gedcom => {
-  const root = readGedcom(source);
+  const root = readGedcom(removeNulBytes(source));
 
   const individuals = root
     .getIndividualRecord()

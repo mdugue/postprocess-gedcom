@@ -50,6 +50,25 @@ describe("parseGedcom", () => {
     ).toThrow("ohne ID");
   });
 
+  test("ignores NUL padding from Family Tree Maker", () => {
+    const { individuals } = parseGedcom(
+      toBuffer(
+        "0 HEAD\n0 @I1@ INDI\n1 NAME Anna /Muster/\n1 TITL Graf\0\0\0\n1 SEX W\n0 TRLR\n"
+      )
+    );
+
+    expect(individuals[0]?.name).toBe("Anna Muster");
+    expect(individuals[0]?.sex).toBe("W");
+  });
+
+  test("keeps NUL bytes that belong to UTF-16 text", () => {
+    const source = "\uFEFF0 HEAD\n0 @I1@ INDI\n1 NAME Anna /Muster/\n0 TRLR\n";
+
+    const utf16 = Uint16Array.from(source, (char) => char.codePointAt(0) ?? 0);
+
+    expect(parseGedcom(utf16.buffer).individuals[0]?.name).toBe("Anna Muster");
+  });
+
   test("reads files in older encodings", () => {
     const source =
       "0 HEAD\n1 CHAR ANSI\n0 @I1@ INDI\n1 NAME Jürgen /Müller/\n0 TRLR\n";

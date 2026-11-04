@@ -41,3 +41,4 @@ jobs:
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       # The runner image ships Google Chrome, which Bun.WebView finds on its own.
       - run: bun run test:e2e
+      - run: bun run test:e2e:dev

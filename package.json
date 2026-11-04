@@ -9,6 +9,7 @@
     "preview": "bun --production src/index.html",
     "test": "bun test",
     "test:e2e": "bun run build && bun --config=e2e/bunfig.toml test ./e2e/app.e2e.ts --timeout 30000",
+    "test:e2e:dev": "E2E_TARGET=dev bun --config=e2e/bunfig.toml test ./e2e/app.e2e.ts --timeout 30000",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix",

@@ -15,20 +15,77 @@ const FILE_INPUT = "input[type=file]";
 
 type View = InstanceType<typeof Bun.WebView>;
 
-const server = Bun.serve({
-  fetch: async ({ url }) => {
-    const { pathname } = new URL(url);
+const DEV_PORT = 3470;
+const isDevTarget = process.env.E2E_TARGET === "dev";
 
-    const file = Bun.file(
-      path.join(DIST, pathname === "/" ? "index.html" : pathname)
-    );
+const serveBuild = () =>
+  Bun.serve({
+    fetch: async ({ url }) => {
+      const { pathname } = new URL(url);
 
-    return (await file.exists())
-      ? new Response(file)
-      : new Response("Not found", { status: 404 });
-  },
-  port: 0,
-});
+      const file = Bun.file(
+        path.join(DIST, pathname === "/" ? "index.html" : pathname)
+      );
+
+      return (await file.exists())
+        ? new Response(file)
+        : new Response("Not found", { status: 404 });
+    },
+    port: 0,
+  });
+
+const waitForDevServer = async (attempts = POLL_ATTEMPTS): Promise<void> => {
+  const isUp = await fetch(`http://localhost:${DEV_PORT}/`).then(
+    ({ ok }) => ok,
+    () => false
+  );
+
+  if (isUp) {
+    return;
+  }
+
+  if (attempts === 0) {
+    throw new Error("Der Dev-Server ist nicht gestartet.");
+  }
+
+  await Bun.sleep(POLL_INTERVAL_MS);
+  await waitForDevServer(attempts - 1);
+};
+
+// Both targets matter: the dev server evaluates modules differently than the build.
+const startTarget = async () => {
+  if (isDevTarget) {
+    const dev = Bun.spawn(["bun", `--port=${DEV_PORT}`, "src/index.html"], {
+      stderr: "ignore",
+      stdout: "ignore",
+    });
+
+    await waitForDevServer();
+
+    return {
+      stop: async () => {
+        dev.kill();
+        await dev.exited;
+      },
+      url: `http://localhost:${DEV_PORT}/`,
+    };
+  }
+
+  if (!(await Bun.file(path.join(DIST, "index.html")).exists())) {
+    throw new Error("dist/ fehlt, bitte `bun run test:e2e` verwenden.");
+  }
+
+  const build = serveBuild();
+
+  return {
+    stop: async () => {
+      await build.stop(true);
+    },
+    url: build.url.href,
+  };
+};
+
+let target: Awaited<ReturnType<typeof startTarget>>;
 
 // A fresh browser, so a test run can never attach to one the developer has open.
 const createView = (viewport: typeof DESKTOP = DESKTOP) =>
@@ -80,7 +137,7 @@ const loadGedcom = async (view: View) => {
 };
 
 const openLoadedApp = async (view: View) => {
-  await view.navigate(server.url.href);
+  await view.navigate(target.url);
   await loadGedcom(view);
 };
 
@@ -92,13 +149,11 @@ const appendToName = async (view: View, text: string) => {
 
 describe("app", () => {
   beforeAll(async () => {
-    if (!(await Bun.file(path.join(DIST, "index.html")).exists())) {
-      throw new Error("dist/ fehlt, bitte `bun run test:e2e` verwenden.");
-    }
+    target = await startTarget();
   });
 
   afterAll(async () => {
-    await server.stop(true);
+    await target.stop();
   });
 
   test("edits a name and records the change", async () => {

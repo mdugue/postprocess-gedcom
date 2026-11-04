@@ -8,19 +8,20 @@ Wandelt GEDCOM-Dateien im Browser nach JSON um und erlaubt, einzelne Personen un
 
 ## Befehle
 
-| Befehl              | Zweck                                          |
-| ------------------- | ---------------------------------------------- |
-| `bun install`       | Abhängigkeiten installieren                    |
-| `bun run dev`       | Dev-Server mit Hot Reload                      |
-| `bun run build`     | Produktions-Build nach `dist/`                 |
-| `bun run preview`   | Dev-Server im Produktionsmodus                 |
-| `bun run test:e2e`  | Build im echten Browser testen (`Bun.WebView`) |
-| `bun test`          | Tests ausführen                                |
-| `bun run typecheck` | Typen prüfen                                   |
-| `bun run check`     | Lint und Format prüfen                         |
-| `bun run schema`    | JSON Schema für `data.json` erzeugen           |
-| `bun run knip`      | Ungenutzten Code und Pakete finden             |
-| `bun run fix`       | Lint- und Format-Probleme beheben              |
+| Befehl                 | Zweck                                          |
+| ---------------------- | ---------------------------------------------- |
+| `bun install`          | Abhängigkeiten installieren                    |
+| `bun run dev`          | Dev-Server mit Hot Reload                      |
+| `bun run build`        | Produktions-Build nach `dist/`                 |
+| `bun run preview`      | Dev-Server im Produktionsmodus                 |
+| `bun run test:e2e`     | Build im echten Browser testen (`Bun.WebView`) |
+| `bun run test:e2e:dev` | Dasselbe gegen den Dev-Server                  |
+| `bun test`             | Tests ausführen                                |
+| `bun run typecheck`    | Typen prüfen                                   |
+| `bun run check`        | Lint und Format prüfen                         |
+| `bun run schema`       | JSON Schema für `data.json` erzeugen           |
+| `bun run knip`         | Ungenutzten Code und Pakete finden             |
+| `bun run fix`          | Lint- und Format-Probleme beheben              |
 
 UI-Komponenten kommen über `bunx --bun shadcn@latest add <komponente>` nach `src/components/ui`. Design-Tokens stehen als CSS-Variablen in `src/index.css`.
 
