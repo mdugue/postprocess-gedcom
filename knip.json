@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": ["src/main.tsx", "src/test/*.ts"],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["src/components/ui/**", "src/lib/utils.ts"],
+  "ignoreDependencies": [
+    "@fontsource-variable/inter",
+    "shadcn",
+    "tailwindcss",
+    "tw-animate-css"
+  ]
+}
