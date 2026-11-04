@@ -8,21 +8,22 @@ Wandelt GEDCOM-Dateien im Browser nach JSON um und erlaubt, einzelne Personen un
 
 ## Befehle
 
-| Befehl              | Zweck                                |
-| ------------------- | ------------------------------------ |
-| `bun install`       | Abhängigkeiten installieren          |
-| `bun run dev`       | Dev-Server mit Hot Reload            |
-| `bun run build`     | Produktions-Build nach `dist/`       |
-| `bun run preview`   | Dev-Server im Produktionsmodus       |
-| `bun test`          | Tests ausführen                      |
-| `bun run typecheck` | Typen prüfen                         |
-| `bun run check`     | Lint und Format prüfen               |
-| `bun run schema`    | JSON Schema für `data.json` erzeugen |
-| `bun run knip`      | Ungenutzten Code und Pakete finden   |
-| `bun run fix`       | Lint- und Format-Probleme beheben    |
+| Befehl              | Zweck                                          |
+| ------------------- | ---------------------------------------------- |
+| `bun install`       | Abhängigkeiten installieren                    |
+| `bun run dev`       | Dev-Server mit Hot Reload                      |
+| `bun run build`     | Produktions-Build nach `dist/`                 |
+| `bun run preview`   | Dev-Server im Produktionsmodus                 |
+| `bun run test:e2e`  | Build im echten Browser testen (`Bun.WebView`) |
+| `bun test`          | Tests ausführen                                |
+| `bun run typecheck` | Typen prüfen                                   |
+| `bun run check`     | Lint und Format prüfen                         |
+| `bun run schema`    | JSON Schema für `data.json` erzeugen           |
+| `bun run knip`      | Ungenutzten Code und Pakete finden             |
+| `bun run fix`       | Lint- und Format-Probleme beheben              |
 
 UI-Komponenten kommen über `bunx --bun shadcn@latest add <komponente>` nach `src/components/ui`. Design-Tokens stehen als CSS-Variablen in `src/index.css`.
 
 `schema/data.schema.json` beschreibt das Format von `data.json`. Es wird aus `src/lib/export-schema.ts` erzeugt; ein Test prüft, dass beide übereinstimmen.
 
-Änderungen bleiben im `localStorage` des Browsers, bis sie zurückgenommen werden. Auf geteilten Rechnern also am Ende „Alle Änderungen zurücknehmen“ wählen.
+Änderungen überstehen ein Neuladen, bleiben aber nur im `sessionStorage` des Tabs: Beim Schließen sind sie weg. Zum Aufheben dient „Alles herunterladen“.

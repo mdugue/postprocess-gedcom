@@ -409,7 +409,7 @@ describe("App", () => {
   });
 
   test("ignores unusable saved changes", () => {
-    localStorage.setItem(
+    sessionStorage.setItem(
       "postprocess-gedcom/transformations/v1",
       '{"individuals":"kaputt"}'
     );

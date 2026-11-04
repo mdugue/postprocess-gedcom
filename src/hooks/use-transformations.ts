@@ -17,13 +17,14 @@ import type {
 
 export type RecordKind = keyof Transformations;
 
-// Versioned, so a future format change cannot be misread as today's.
+// Family data, so it survives a reload but not the tab. Versioned, so a future
+// format change cannot be misread as today's.
 const STORAGE_KEY = "postprocess-gedcom/transformations/v1";
 
 /** Storage can be unavailable or hold outdated data; both just mean a fresh start. */
 const loadSaved = (): Transformations => {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = sessionStorage.getItem(STORAGE_KEY);
 
     return saved === null
       ? emptyTransformations
@@ -42,9 +43,9 @@ export const countTransformations = ({
 const save = (transformations: Transformations) => {
   try {
     if (countTransformations(transformations) === 0) {
-      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
     } else {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(transformations));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(transformations));
     }
   } catch {
     // Without storage the app still works, only without surviving a reload.

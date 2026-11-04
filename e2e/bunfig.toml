@@ -1,0 +1,2 @@
+# Runs against the built app in a real browser, so without the DOM preload of the unit tests.
+[test]

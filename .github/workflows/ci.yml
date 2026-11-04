@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Pinned, since Bun.WebView is still experimental.
+  BUN_VERSION: 1.4.4
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run check
+      - run: bun run knip
+      - run: bun test
+      - run: bun run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      E2E_BROWSER: chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      # Ubuntu blocks the user namespaces Chrome's sandbox needs by default.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # The runner image ships Google Chrome, which Bun.WebView finds on its own.
+      - run: bun run test:e2e
