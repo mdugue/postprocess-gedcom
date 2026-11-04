@@ -1,6 +1,7 @@
-import { SearchIcon } from "lucide-react";
+import { SearchIcon, Undo2Icon } from "lucide-react";
 import { useState } from "react";
 
+import { IconButton } from "@/components/icon-button";
 import { familyTitle } from "@/components/record-columns";
 import { TransformationCard } from "@/components/transformation-card";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -36,8 +37,8 @@ const collectEntries = (
           ? describeChanges(
               INDIVIDUAL_FIELDS,
               individual && {
-                birth: toIsoDate(individual.birth),
-                death: toIsoDate(individual.death),
+                birth: toIsoDate(individual.birth) ?? individual.birthRaw,
+                death: toIsoDate(individual.death) ?? individual.deathRaw,
                 name: individual.name,
                 sex: individual.sex,
               },
@@ -48,23 +49,29 @@ const collectEntries = (
       id,
       key: `individual-${id}`,
       kind: "Person",
-      missing: individual === undefined,
+      // Saved changes are shown before their GEDCOM is loaded; only then can one be orphaned.
+      missing: gedcom !== undefined && individual === undefined,
       onUndo: () => {
         actions.undo("individuals", id);
       },
-      title: individual?.name ?? `Keine Person mit ID ${id}`,
+      title:
+        individual?.name ??
+        (gedcom ? `Keine Person mit ID ${id}` : transform.hint),
       type: transform.type,
     };
   }),
   ...Object.entries(families).map(([id, transform]) => {
     const family = gedcom?.familiesById.get(id);
+    const orphanTitle = gedcom ? `Keine Familie mit ID ${id}` : transform.hint;
 
     return {
       changes:
         transform.type === "update"
           ? describeChanges(
               FAMILY_FIELDS,
-              family && { marriage: toIsoDate(family.marriage) },
+              family && {
+                marriage: toIsoDate(family.marriage) ?? family.marriageRaw,
+              },
               transform.data
             )
           : [],
@@ -72,13 +79,11 @@ const collectEntries = (
       id,
       key: `family-${id}`,
       kind: "Familie",
-      missing: family === undefined,
+      missing: gedcom !== undefined && family === undefined,
       onUndo: () => {
         actions.undo("families", id);
       },
-      title: family
-        ? familyTitle(gedcom, family)
-        : `Keine Familie mit ID ${id}`,
+      title: family ? familyTitle(gedcom, family) : orphanTitle,
       type: transform.type,
     };
   }),
@@ -101,19 +106,29 @@ export const TransformationsList = ({
 
   return (
     <>
-      <InputGroup>
-        <InputGroupInput
-          aria-label="Transformationen durchsuchen"
-          onChange={(event) => {
-            setQuery(event.target.value);
+      <div className="flex items-center gap-2">
+        <InputGroup>
+          <InputGroupInput
+            aria-label="Transformationen durchsuchen"
+            onChange={(event) => {
+              setQuery(event.target.value);
+            }}
+            placeholder="Transformationen suchen …"
+            value={query}
+          />
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+        </InputGroup>
+        <IconButton
+          label="Alle Änderungen zurücknehmen"
+          onClick={() => {
+            actions.clearAll();
           }}
-          placeholder="Transformationen suchen …"
-          value={query}
-        />
-        <InputGroupAddon>
-          <SearchIcon />
-        </InputGroupAddon>
-      </InputGroup>
+        >
+          <Undo2Icon />
+        </IconButton>
+      </div>
       <ScrollArea className="-mr-3 -ml-1 min-h-0 flex-1">
         <div className="flex flex-col gap-2 py-1 pr-3 pl-1">
           {entries.length === 0 && (

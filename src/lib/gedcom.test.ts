@@ -21,6 +21,8 @@ describe("parseGedcom", () => {
     expect(anna?.birth?.getFullYear()).toBe(1950);
     expect(anna?.birth?.getMonth()).toBe(2);
     expect(bernd?.birth).toBeUndefined();
+    expect(bernd?.birthRaw).toBe("1950");
+    expect(anna?.birthRaw).toBeUndefined();
     expect(bernd?.death?.getDate()).toBe(7);
   });
 

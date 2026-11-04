@@ -33,18 +33,25 @@ export const DatePicker = ({
   disabled,
   label,
   onChange,
+  rawValue,
   value,
 }: {
   disabled?: boolean;
   label: string;
   onChange: (value: string | null) => void;
+  /** Source text of an imprecise date, shown until it is replaced. */
+  rawValue?: string;
   value: string | undefined;
 }) => {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string>();
   const date = value === undefined ? undefined : parseISO(value);
-  const text = draft ?? (date ? toDisplayDate(date) : "");
-  const isInvalid = text !== "" && parseDisplayDate(text) === undefined;
+  const text = draft ?? (date ? toDisplayDate(date) : (rawValue ?? ""));
+
+  const isInvalid =
+    draft !== undefined &&
+    draft !== "" &&
+    parseDisplayDate(draft) === undefined;
 
   return (
     <InputGroup variant="inline">
@@ -62,7 +69,7 @@ export const DatePicker = ({
 
           if (typed) {
             onChange(formatIsoDate(typed));
-          } else if (target.value === "" && date) {
+          } else if (target.value === "" && (date || rawValue !== undefined)) {
             onChange(null);
           }
         }}

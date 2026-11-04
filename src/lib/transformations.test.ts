@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parseGedcom } from "@/lib/gedcom";
 import {
+  applyIndividualChanges,
   buildExport,
   emptyTransformations,
   matchesTransformation,
@@ -54,6 +55,23 @@ describe("buildExport", () => {
     expect(individuals[0]?.birth).toBeUndefined();
     expect(individuals[1]?.birth).toBe("1950-02-01");
     expect(individuals[1]?.death).toBe("2001-07-07");
+  });
+
+  test("keeps imprecise source dates until an edit replaces them", () => {
+    const untouched = buildExport(gedcom, emptyTransformations);
+
+    expect(untouched.individuals[1]?.birth).toBeUndefined();
+    expect(untouched.individuals[1]?.birthRaw).toBe("1950");
+
+    const edited = buildExport(gedcom, {
+      families: {},
+      individuals: {
+        "2": { data: { birth: "1950-02-01" }, hint: "", type: "update" },
+      },
+    });
+
+    expect(edited.individuals[1]?.birth).toBe("1950-02-01");
+    expect(edited.individuals[1]?.birthRaw).toBeUndefined();
   });
 
   test("clears a marriage date and removes deleted families", () => {
@@ -124,6 +142,22 @@ describe("parseTransformationFile", () => {
     expect(() =>
       parseTransformationFile('{"individuals":{"1":{"type":"rename"}}}')
     ).toThrow("individuals");
+  });
+});
+
+describe("applyIndividualChanges", () => {
+  test("applies edits and leaves other records untouched", () => {
+    const [anna, bernd, clara] = applyIndividualChanges(gedcom.individuals, {
+      "1": { data: { birth: null, name: "Zora" }, hint: "", type: "update" },
+      "2": { data: { birth: "1950-02-01" }, hint: "", type: "update" },
+      "3": { hint: "", type: "delete" },
+    });
+
+    expect(anna?.name).toBe("Zora");
+    expect(anna?.birth).toBeUndefined();
+    expect(bernd?.birth?.getMonth()).toBe(1);
+    expect(bernd?.birthRaw).toBeUndefined();
+    expect(clara).toBe(gedcom.individuals[2]);
   });
 });
 

@@ -54,6 +54,7 @@ const ColumnMenu = <T extends object>({
                 aria-label={`${label} filtern`}
                 onChange={(event) => {
                   column.setFilterValue(event.target.value);
+                  column.table.setPageIndex(0);
                 }}
                 placeholder={`${label} filtern …`}
                 value={filterText}

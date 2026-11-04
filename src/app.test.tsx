@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { App } from "@/app";
@@ -312,11 +312,174 @@ describe("App", () => {
     );
     await user.click(await screen.findByRole("button", { name: "Absteigend" }));
 
-    expect(renderedNames()[0]).toBe("Name von Anna Muster");
+    expect(renderedNames()).toEqual([
+      "Name von Anna Muster",
+      "Name von Bernd Muster",
+      "Name von Clara Muster",
+    ]);
 
     await user.click(screen.getByRole("button", { name: "Aufsteigend" }));
 
+    // Bernd only has the year 1950, which sorts before Anna's March 1950.
+    expect(renderedNames()).toEqual([
+      "Name von Bernd Muster",
+      "Name von Anna Muster",
+      "Name von Clara Muster",
+    ]);
+  });
+
+  test("shows imprecise dates until they are replaced", async () => {
+    const user = await loadFixture();
+    const birth = textInput("Geburt von Bernd Muster");
+
+    expect(birth.value).toBe("1950");
+    expect(birth.getAttribute("aria-invalid")).toBe("false");
+
+    await user.clear(birth);
+    await user.tab();
+
+    expect(textInput("Geburt von Bernd Muster").value).toBe("");
+    expect(
+      screen.getByRole("heading", { name: "Transformationen 1" })
+    ).toBeDefined();
+  });
+
+  test("sorts by an edit only once the field is left", async () => {
+    const user = await loadFixture();
+
+    await user.click(
+      within(screen.getByRole("tabpanel")).getByRole("button", { name: "Name" })
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Aufsteigend" })
+    );
+    await user.keyboard("{Escape}");
+
+    const anna = textInput("Name von Anna Muster");
+
+    await user.clear(anna);
+    await user.type(anna, "Zora");
+
     expect(renderedNames()[0]).toBe("Name von Anna Muster");
+
+    await user.tab();
+
+    expect(renderedNames().at(-1)).toBe("Name von Anna Muster");
+  });
+
+  test("finds edited values only once the field is left", async () => {
+    const user = await loadFixture();
+    const anna = textInput("Name von Anna Muster");
+
+    await user.clear(anna);
+    await user.type(anna, "Zora");
+    await user.tab();
+    await user.type(
+      within(screen.getByRole("tabpanel")).getByLabelText(
+        "Alle Spalten durchsuchen"
+      ),
+      "zora"
+    );
+
+    expect(renderedNames()).toEqual(["Name von Anna Muster"]);
+  });
+
+  test("restores changes after a reload", async () => {
+    const user = await loadFixture();
+
+    await user.type(textInput("Name von Anna Muster"), "!");
+    cleanup();
+
+    const reloaded = render(<App />);
+
+    expect(
+      within(reloaded.container).getByRole("heading", {
+        name: "Transformationen 1",
+      })
+    ).toBeDefined();
+
+    await user.upload(
+      fileInput(),
+      new File([GEDCOM_FIXTURE], "family.ged", { type: "text/ged" })
+    );
+
+    const restored = await screen.findAllByDisplayValue("Anna Muster!");
+
+    expect(restored.length).toBeGreaterThan(0);
+  });
+
+  test("ignores unusable saved changes", () => {
+    localStorage.setItem(
+      "postprocess-gedcom/transformations/v1",
+      '{"individuals":"kaputt"}'
+    );
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", { name: "Transformationen 0" })
+    ).toBeDefined();
+  });
+
+  test("undoes a deletion from the toast", async () => {
+    const user = await loadFixture();
+
+    await user.click(
+      screen.getByRole("button", { name: "Anna Muster löschen" })
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Transformationen 1" })
+    ).toBeDefined();
+
+    await user.click(await screen.findByRole("button", { name: "Rückgängig" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Transformationen 0" })
+    ).toBeDefined();
+  });
+
+  test("takes back all changes and can undo that", async () => {
+    const user = await loadFixture();
+
+    await user.type(textInput("Name von Anna Muster"), "!");
+    await user.click(
+      screen.getByRole("button", { name: "Alle Änderungen zurücknehmen" })
+    );
+
+    expect(textInput("Name von Anna Muster").value).toBe("Anna Muster");
+
+    await user.click(await screen.findByRole("button", { name: "Rückgängig" }));
+
+    expect(textInput("Name von Anna Muster").value).toBe("Anna Muster!");
+  });
+
+  test("finds a person through the command palette", async () => {
+    const user = await loadFixture();
+
+    await user.keyboard("{Control>}k{/Control}");
+    await user.type(
+      await screen.findByPlaceholderText("Befehl oder Person suchen …"),
+      "clara"
+    );
+    await user.click(
+      await screen.findByRole("option", { name: "Clara Muster" })
+    );
+
+    expect(renderedNames()).toEqual(["Name von Clara Muster"]);
+  });
+
+  test("switches to the dark theme", async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(
+      screen.getByRole("button", { name: "Darstellung wählen" })
+    );
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: "Dunkel" })
+    );
+
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
   test("hiding a column removes its filter", async () => {

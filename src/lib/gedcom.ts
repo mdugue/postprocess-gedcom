@@ -8,14 +8,19 @@ const referenceDate = new Date();
 const xrefSchema = (prefix: "@F" | "@I") =>
   z.string().transform((value) => value.replace(prefix, "").replace("@", ""));
 
-/** GEDCOM dates can be partial (`1950`); only complete dates are kept. */
+/**
+ * GEDCOM dates can be imprecise (`1950`, `ABT 1900`). Those have no exact date,
+ * so the source text is kept to show and export instead of losing it.
+ */
 const dateSchema = z
   .string()
   .default("")
   .transform((value) => {
     const date = parseDate(value, GEDCOM_DATE_FORMAT, referenceDate);
 
-    return isValid(date) ? date : undefined;
+    return isValid(date)
+      ? { date, raw: undefined }
+      : { date: undefined, raw: value === "" ? undefined : value };
   });
 
 const individualNodeSchema = z
@@ -35,8 +40,10 @@ const individualNodeSchema = z
     const name = data.NAME.replaceAll("/", "");
 
     return {
-      birth: data["BIRTH/DATE"],
-      death: data["DEATH/DATE"],
+      birth: data["BIRTH/DATE"].date,
+      birthRaw: data["BIRTH/DATE"].raw,
+      death: data["DEATH/DATE"].date,
+      deathRaw: data["DEATH/DATE"].raw,
       headOfFamilies: [
         data["@FAMILY_SPOUSE"],
         ...data["+@FAMILY_SPOUSE"],
@@ -64,7 +71,8 @@ const familyNodeSchema = z
       (id) => id !== undefined
     ),
     id: data.xref_id,
-    marriage: data["MARRIAGE/DATE"],
+    marriage: data["MARRIAGE/DATE"].date,
+    marriageRaw: data["MARRIAGE/DATE"].raw,
     parents: [data["@HUSBAND"], data["@WIFE"]].filter((id) => id !== undefined),
   }));
 
