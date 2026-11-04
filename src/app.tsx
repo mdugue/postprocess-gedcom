@@ -36,6 +36,7 @@ import {
   useTransformations,
 } from "@/hooks/use-transformations";
 import type { RecordKind } from "@/hooks/use-transformations";
+import { parseGedcom } from "@/lib/gedcom";
 import type { Gedcom } from "@/lib/gedcom";
 import type { RecordTableMeta } from "@/lib/record-table";
 import {
@@ -47,9 +48,6 @@ import {
 
 const GEDCOM_ACCEPT = { "text/ged": [".ged"] };
 const TRANSFORMATION_ACCEPT = { "text/gedTransform": [".gedTransform"] };
-
-// The parser pulls in large dependencies, so it loads on first use.
-const loadParser = async () => await import("@/lib/gedcom");
 
 const countLabel = (count: number, singular: string, plural: string) =>
   `${count} ${count === 1 ? singular : plural}`;
@@ -151,12 +149,9 @@ export const App = () => {
     setSearches((current) => ({ ...current, [kind]: search }));
   };
 
-  const load = async (
-    file: File,
-    apply: (source: string) => Promise<void> | void
-  ) => {
+  const load = async (file: File, apply: (file: File) => Promise<void>) => {
     try {
-      await apply(await file.text());
+      await apply(file);
       setLoadError(undefined);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -187,9 +182,7 @@ export const App = () => {
       accept={GEDCOM_ACCEPT}
       onDrop={(file) => {
         void load(file, async (source) => {
-          const { parseGedcom } = await loadParser();
-
-          setGedcom(parseGedcom(source));
+          setGedcom(parseGedcom(await source.arrayBuffer()));
         });
       }}
       title="GEDCOM-Datei hinzufügen"
@@ -200,8 +193,8 @@ export const App = () => {
     <FileDrop
       accept={TRANSFORMATION_ACCEPT}
       onDrop={(file) => {
-        void load(file, (source) => {
-          actions.replaceAll(parseTransformationFile(source));
+        void load(file, async (source) => {
+          actions.replaceAll(parseTransformationFile(await source.text()));
         });
       }}
       title="Transformationsdatei hinzufügen"

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { parseGedcom } from "@/lib/gedcom";
-import { GEDCOM_FIXTURE } from "@/test/fixture";
+import { GEDCOM_FIXTURE, toBuffer } from "@/test/fixture";
 
 describe("parseGedcom", () => {
-  const gedcom = parseGedcom(GEDCOM_FIXTURE);
+  const gedcom = parseGedcom(toBuffer(GEDCOM_FIXTURE));
 
   test("reads individuals with normalized ids and names", () => {
     expect(gedcom.individuals.map(({ id, name }) => [id, name])).toEqual([
@@ -34,15 +34,33 @@ describe("parseGedcom", () => {
   });
 
   test("rejects files without any records", () => {
-    expect(() => parseGedcom("")).toThrow("keine Personen oder Familien");
-    expect(() => parseGedcom("0 HEAD\n0 TRLR\n")).toThrow(
+    expect(() => parseGedcom(toBuffer(""))).toThrow();
+    expect(() => parseGedcom(toBuffer("0 HEAD\n0 TRLR\n"))).toThrow(
       "keine Personen oder Familien"
     );
   });
 
   test("rejects malformed records instead of dropping them", () => {
     expect(() =>
-      parseGedcom("0 INDI\n1 NAME Ohne /Id/\n0 @I2@ INDI\n1 NAME Mit /Id/\n")
-    ).toThrow("xref_id");
+      parseGedcom(
+        toBuffer(
+          "0 HEAD\n0 INDI\n1 NAME Ohne /Id/\n0 @I2@ INDI\n1 NAME Mit /Id/\n0 TRLR\n"
+        )
+      )
+    ).toThrow("ohne ID");
+  });
+
+  test("reads files in older encodings", () => {
+    const source =
+      "0 HEAD\n1 CHAR ANSI\n0 @I1@ INDI\n1 NAME Jürgen /Müller/\n0 TRLR\n";
+
+    const windows1252 = Uint8Array.from(
+      source,
+      (char) => char.codePointAt(0) ?? 0
+    );
+
+    expect(parseGedcom(windows1252.buffer).individuals[0]?.name).toBe(
+      "Jürgen Müller"
+    );
   });
 });

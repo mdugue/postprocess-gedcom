@@ -4,7 +4,7 @@ Wandelt GEDCOM-Dateien im Browser nach JSON um und erlaubt, einzelne Personen un
 
 ## Stack
 
-[Bun](https://bun.com) (Dev-Server, Bundler, Test-Runner), React 19, Tailwind CSS v4, [shadcn/ui](https://ui.shadcn.com) auf Basis von [Base UI](https://base-ui.com), TanStack Table v9, Zod und [Ultracite](https://www.ultracite.ai) (Oxlint und Oxfmt).
+[Bun](https://bun.com) (Dev-Server, Bundler, Test-Runner), React 19, Tailwind CSS v4, [shadcn/ui](https://ui.shadcn.com) auf Basis von [Base UI](https://base-ui.com), TanStack Table v9, Zod, [read-gedcom](https://github.com/arbre-app/read-gedcom) und [Ultracite](https://www.ultracite.ai) (Oxlint und Oxfmt).
 
 ## Befehle
 

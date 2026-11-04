@@ -13,9 +13,9 @@ import {
   toIsoDate,
 } from "@/lib/transformations";
 import type { Transformations } from "@/lib/transformations";
-import { GEDCOM_FIXTURE } from "@/test/fixture";
+import { GEDCOM_FIXTURE, toBuffer } from "@/test/fixture";
 
-const gedcom = parseGedcom(GEDCOM_FIXTURE);
+const gedcom = parseGedcom(toBuffer(GEDCOM_FIXTURE));
 
 describe("buildExport", () => {
   test("formats dates and keeps untouched records", () => {

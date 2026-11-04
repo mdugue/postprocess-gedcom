@@ -1,99 +1,27 @@
 import { isValid, parse as parseDate } from "date-fns";
-import { compact, parse } from "parse-gedcom";
-import { z } from "zod";
+import { readGedcom } from "read-gedcom";
 
 const GEDCOM_DATE_FORMAT = "d LLL y";
 const referenceDate = new Date();
 
-const xrefSchema = (prefix: "@F" | "@I") =>
-  z.string().transform((value) => value.replace(prefix, "").replace("@", ""));
+export interface Individual {
+  birth: Date | undefined;
+  birthRaw: string | undefined;
+  death: Date | undefined;
+  deathRaw: string | undefined;
+  headOfFamilies: string[];
+  id: string;
+  name: string;
+  sex: string | undefined;
+}
 
-/**
- * GEDCOM dates can be imprecise (`1950`, `ABT 1900`). Those have no exact date,
- * so the source text is kept to show and export instead of losing it.
- */
-const dateSchema = z
-  .string()
-  .default("")
-  .transform((value) => {
-    const date = parseDate(value, GEDCOM_DATE_FORMAT, referenceDate);
-
-    return isValid(date)
-      ? { date, raw: undefined }
-      : { date: undefined, raw: value === "" ? undefined : value };
-  });
-
-const individualNodeSchema = z
-  .object({
-    data: z.object({
-      "+@FAMILY_SPOUSE": z.array(xrefSchema("@F")).default([]),
-      "@FAMILY_SPOUSE": xrefSchema("@F").optional(),
-      "BIRTH/DATE": dateSchema,
-      "DEATH/DATE": dateSchema,
-      NAME: z.string().default(""),
-      SEX: z.string().optional(),
-      xref_id: xrefSchema("@I"),
-    }),
-    type: z.literal("INDI"),
-  })
-  .transform(({ data }) => {
-    const name = data.NAME.replaceAll("/", "");
-
-    return {
-      birth: data["BIRTH/DATE"].date,
-      birthRaw: data["BIRTH/DATE"].raw,
-      death: data["DEATH/DATE"].date,
-      deathRaw: data["DEATH/DATE"].raw,
-      headOfFamilies: [
-        data["@FAMILY_SPOUSE"],
-        ...data["+@FAMILY_SPOUSE"],
-      ].filter((id) => id !== undefined),
-      id: data.xref_id,
-      name: name === "" ? "no name" : name,
-      sex: data.SEX,
-    };
-  });
-
-const familyNodeSchema = z
-  .object({
-    data: z.object({
-      "+@CHILD": z.array(xrefSchema("@I")).default([]),
-      "@CHILD": xrefSchema("@I").optional(),
-      "@HUSBAND": xrefSchema("@I").optional(),
-      "@WIFE": xrefSchema("@I").optional(),
-      "MARRIAGE/DATE": dateSchema,
-      xref_id: xrefSchema("@F"),
-    }),
-    type: z.literal("FAM"),
-  })
-  .transform(({ data }) => ({
-    children: [data["@CHILD"], ...data["+@CHILD"]].filter(
-      (id) => id !== undefined
-    ),
-    id: data.xref_id,
-    marriage: data["MARRIAGE/DATE"].date,
-    marriageRaw: data["MARRIAGE/DATE"].raw,
-    parents: [data["@HUSBAND"], data["@WIFE"]].filter((id) => id !== undefined),
-  }));
-
-const compactRootSchema = z.object({
-  children: z.array(z.looseObject({ type: z.string() })),
-});
-
-/** Fails on malformed records, since skipping them would drop them from the export. */
-const parseRecords = <T extends z.ZodType>(schema: T, records: unknown[]) => {
-  const result = z.array(schema).safeParse(records);
-
-  if (!result.success) {
-    throw new Error(z.prettifyError(result.error));
-  }
-
-  return result.data;
-};
-
-export type Individual = z.output<typeof individualNodeSchema>;
-
-export type Family = z.output<typeof familyNodeSchema>;
+export interface Family {
+  children: string[];
+  id: string;
+  marriage: Date | undefined;
+  marriageRaw: string | undefined;
+  parents: string[];
+}
 
 export interface Gedcom {
   families: Family[];
@@ -102,18 +30,79 @@ export interface Gedcom {
   individualsById: ReadonlyMap<string, Individual>;
 }
 
-export const parseGedcom = (source: string): Gedcom => {
-  const { children } = compactRootSchema.parse(compact(parse(source)));
+type XrefPrefix = "@F" | "@I";
 
-  const individuals = parseRecords(
-    individualNodeSchema,
-    children.filter(({ type }) => type === "INDI")
-  );
+const stripXref = (prefix: XrefPrefix, value: string) =>
+  value.replace(prefix, "").replace("@", "");
 
-  const families = parseRecords(
-    familyNodeSchema,
-    children.filter(({ type }) => type === "FAM")
-  );
+const stripXrefs = (prefix: XrefPrefix, values: string[]) =>
+  values.map((value) => stripXref(prefix, value));
+
+/** Fails on malformed records, since skipping them would drop them from the export. */
+const recordId = (prefix: XrefPrefix, pointer: string | null | undefined) => {
+  if (pointer === null || pointer === undefined || pointer === "") {
+    throw new Error("Die Datei enthält einen Eintrag ohne ID.");
+  }
+
+  return stripXref(prefix, pointer);
+};
+
+/**
+ * GEDCOM dates can be imprecise (`1950`, `ABT 1900`). Those have no exact date,
+ * so the source text is kept to show and export instead of losing it.
+ */
+const readDate = (value: string | null | undefined) => {
+  const date = parseDate(value ?? "", GEDCOM_DATE_FORMAT, referenceDate);
+
+  return isValid(date)
+    ? { date, raw: undefined }
+    : { date: undefined, raw: value ?? undefined };
+};
+
+/** Takes the raw bytes, since the library detects the encoding of older files. */
+export const parseGedcom = (source: ArrayBuffer): Gedcom => {
+  const root = readGedcom(source);
+
+  const individuals = root
+    .getIndividualRecord()
+    .arraySelect()
+    .map((record): Individual => {
+      const name = (record.getName().value()[0] ?? "").replaceAll("/", "");
+      const birth = readDate(record.getEventBirth().getDate().value()[0]);
+      const death = readDate(record.getEventDeath().getDate().value()[0]);
+
+      return {
+        birth: birth.date,
+        birthRaw: birth.raw,
+        death: death.date,
+        deathRaw: death.raw,
+        headOfFamilies: stripXrefs(
+          "@F",
+          record.getSpouseFamilyLink().valueNonNull()
+        ),
+        id: recordId("@I", record.pointer()[0]),
+        name: name === "" ? "no name" : name,
+        sex: record.getSex().value()[0] ?? undefined,
+      };
+    });
+
+  const families = root
+    .getFamilyRecord()
+    .arraySelect()
+    .map((record): Family => {
+      const marriage = readDate(record.getEventMarriage().getDate().value()[0]);
+
+      return {
+        children: stripXrefs("@I", record.getChild().valueNonNull()),
+        id: recordId("@F", record.pointer()[0]),
+        marriage: marriage.date,
+        marriageRaw: marriage.raw,
+        parents: stripXrefs("@I", [
+          ...record.getHusband().valueNonNull().slice(0, 1),
+          ...record.getWife().valueNonNull().slice(0, 1),
+        ]),
+      };
+    });
 
   // A loaded GEDCOM replaces the drop target, so an empty one would be a dead end.
   if (individuals.length === 0 && families.length === 0) {

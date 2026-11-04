@@ -168,7 +168,10 @@ describe("app", () => {
     await openLoadedApp(view);
     await appendToName(view, " Neu");
     await waitFor(view, heading("Transformationen1"));
+    // Marks the old page, since the reload may report back before it is replaced.
+    await view.evaluate("window.beforeReload = true");
     await view.reload();
+    await waitFor(view, "!window.beforeReload");
     await waitFor(view, heading("Transformationen1"));
     await loadGedcom(view);
 
