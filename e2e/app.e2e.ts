@@ -254,6 +254,33 @@ describe("app", () => {
     );
   });
 
+  test("removes a person from a family and exports it", async () => {
+    await using view = createView();
+
+    await openLoadedApp(view);
+    await view.evaluate(`(() => {
+      window.exported = [];
+      const create = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = (blob) => {
+        window.exported.push(blob);
+        return create(blob);
+      };
+    })()`);
+
+    await view.click(
+      'tr:has([aria-label="Kind in: Clara Muster"]) [data-slot="combobox-chip-remove"]'
+    );
+    await waitFor(view, heading("Transformationen1"));
+    await view.click("footer button:last-child");
+    await waitFor(view, "window.exported.length === 2");
+
+    const { families } = exportSchema.parse(
+      JSON.parse(String(await view.evaluate("window.exported[1].text()")))
+    );
+
+    expect(families[0]?.children).toEqual([]);
+  });
+
   test("shows cards and a sheet on phones", async () => {
     await using view = createView(PHONE);
 

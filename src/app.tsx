@@ -1,13 +1,15 @@
 import { cn } from "cn";
 import { CircleAlertIcon, FileDownIcon, ListChecksIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { CommandPalette } from "@/components/command-palette";
 import { FileDrop } from "@/components/file-drop";
 import {
-  createFamilyColumns,
+  familyColumns,
   individualColumns,
+  toFamilyRows,
+  toIndividualRows,
 } from "@/components/record-columns";
 import { RecordTable } from "@/components/record-table";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -35,16 +37,15 @@ import {
   countTransformations,
   useTransformations,
 } from "@/hooks/use-transformations";
-import type { RecordKind } from "@/hooks/use-transformations";
+import type {
+  RecordKind,
+  TransformationActions,
+} from "@/hooks/use-transformations";
+import { createLinkGraph } from "@/lib/family-links";
 import { parseGedcom } from "@/lib/gedcom";
 import type { Gedcom } from "@/lib/gedcom";
-import type { RecordTableMeta } from "@/lib/record-table";
-import {
-  applyFamilyChanges,
-  applyIndividualChanges,
-  downloadAll,
-  parseTransformationFile,
-} from "@/lib/transformations";
+import { downloadAll, parseTransformationFile } from "@/lib/transformations";
+import type { Transformations } from "@/lib/transformations";
 
 const GEDCOM_ACCEPT = { "text/ged": [".ged"] };
 const TRANSFORMATION_ACCEPT = { "text/gedTransform": [".gedTransform"] };
@@ -73,21 +74,41 @@ const Section = ({
 );
 
 const LoadedRecords = ({
+  actions,
   gedcom,
-  meta,
   onSearchChange,
   onTabChange,
   searches,
   tab,
+  transformations,
 }: {
+  actions: TransformationActions;
   gedcom: Gedcom;
-  meta: RecordTableMeta;
   onSearchChange: (kind: RecordKind, search: string) => void;
   onTabChange: (kind: RecordKind) => void;
   searches: Record<RecordKind, string>;
   tab: RecordKind;
+  transformations: Transformations;
 }) => {
-  const familyColumns = useMemo(() => createFamilyColumns(gedcom), [gedcom]);
+  const meta = useMemo(
+    () => ({
+      actions,
+      gedcom,
+      links: createLinkGraph(gedcom, transformations),
+      transformations,
+    }),
+    [actions, gedcom, transformations]
+  );
+
+  const individualRows = useCallback(
+    (settled: Transformations) => toIndividualRows(gedcom, settled),
+    [gedcom]
+  );
+
+  const familyRows = useCallback(
+    (settled: Transformations) => toFamilyRows(gedcom, settled),
+    [gedcom]
+  );
 
   return (
     <Tabs
@@ -104,28 +125,26 @@ const LoadedRecords = ({
       {/* Stay mounted so filters, sorting and paging survive switching tabs. */}
       <TabsContent className="contents" keepMounted value="individuals">
         <RecordTable
-          applyChanges={applyIndividualChanges}
-          changes={meta.transformations.individuals}
+          changes={transformations.individuals}
           columns={individualColumns}
-          data={gedcom.individuals}
           meta={meta}
           onSearchChange={(search) => {
             onSearchChange("individuals", search);
           }}
           search={searches.individuals}
+          toRows={individualRows}
         />
       </TabsContent>
       <TabsContent className="contents" keepMounted value="families">
         <RecordTable
-          applyChanges={applyFamilyChanges}
-          changes={meta.transformations.families}
+          changes={transformations.families}
           columns={familyColumns}
-          data={gedcom.families}
           meta={meta}
           onSearchChange={(search) => {
             onSearchChange("families", search);
           }}
           search={searches.families}
+          toRows={familyRows}
         />
       </TabsContent>
     </Tabs>
@@ -139,11 +158,6 @@ export const App = () => {
   const { actions, transformations } = useTransformations();
   const [tab, setTab] = useState<RecordKind>("individuals");
   const [searches, setSearches] = useState({ families: "", individuals: "" });
-
-  const meta = useMemo(
-    () => ({ actions, gedcom, transformations }),
-    [actions, gedcom, transformations]
-  );
 
   const setSearch = (kind: RecordKind, search: string) => {
     setSearches((current) => ({ ...current, [kind]: search }));
@@ -170,12 +184,13 @@ export const App = () => {
 
   const records = gedcom ? (
     <LoadedRecords
+      actions={actions}
       gedcom={gedcom}
-      meta={meta}
       onSearchChange={setSearch}
       onTabChange={setTab}
       searches={searches}
       tab={tab}
+      transformations={transformations}
     />
   ) : (
     <FileDrop

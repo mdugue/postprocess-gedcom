@@ -140,8 +140,71 @@ describe("App", () => {
       throw new Error("Familienzeile fehlt");
     }
 
-    expect(within(row).getByText("Bernd Muster, Anna Muster")).toBeDefined();
+    expect(within(row).getByText("Bernd Muster")).toBeDefined();
+    expect(within(row).getByText("Anna Muster")).toBeDefined();
     expect(within(row).getByText("Clara Muster")).toBeDefined();
+  });
+
+  test("adds and removes a child of a family", async () => {
+    const user = await loadFixture();
+
+    await user.click(screen.getByRole("tab", { name: "Familien" }));
+
+    const row = screen
+      .getByLabelText("Kinder von Bernd Muster & Anna Muster")
+      .closest("tr");
+
+    if (!row) {
+      throw new Error("Familienzeile fehlt");
+    }
+
+    await user.click(
+      within(row).getAllByRole("button", { name: "Entfernen" })[2] ?? row
+    );
+
+    expect(within(row).queryByText("Clara Muster")).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Transformationen 1" })
+    ).toBeDefined();
+    expect(screen.getByText("− Clara Muster")).toBeDefined();
+
+    await user.click(
+      screen.getByLabelText("Kinder von Bernd Muster & Anna Muster")
+    );
+    await user.type(
+      screen.getByLabelText("Kinder von Bernd Muster & Anna Muster"),
+      "clara"
+    );
+    await user.click(
+      await screen.findByRole("option", { name: /Clara Muster/u })
+    );
+
+    // Back at the source state, the family is no longer a change.
+    expect(
+      screen.getByRole("heading", { name: "Transformationen 0" })
+    ).toBeDefined();
+  });
+
+  test("offers only families that do not close a cycle", async () => {
+    const user = await loadFixture();
+
+    await user.type(screen.getByLabelText("Kind in: Anna Muster"), "muster");
+
+    // Anna is a parent in the only family, so she cannot be its child too.
+    expect(await screen.findByText("Keine passende Familie")).toBeDefined();
+  });
+
+  test("links a person to a family from the people tab", async () => {
+    const user = await loadFixture();
+
+    await user.click(
+      within(
+        screen.getByLabelText("Kind in: Clara Muster").closest("td") ??
+          document.body
+      ).getByRole("button", { name: "Entfernen" })
+    );
+
+    expect(screen.getByText("− Clara Muster")).toBeDefined();
   });
 
   test("picks a birth date from the calendar and undoes it", async () => {

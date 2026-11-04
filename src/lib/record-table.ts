@@ -19,13 +19,15 @@ import {
 import type { Column, Table } from "@tanstack/react-table";
 
 import type { TransformationActions } from "@/hooks/use-transformations";
+import type { LinkGraph } from "@/lib/family-links";
 import type { Gedcom } from "@/lib/gedcom";
 import { toDisplayDate } from "@/lib/transformations";
 import type { Transformations } from "@/lib/transformations";
 
 export interface RecordTableMeta {
   actions: TransformationActions;
-  gedcom: Gedcom | undefined;
+  gedcom: Gedcom;
+  links: LinkGraph;
   transformations: Transformations;
 }
 

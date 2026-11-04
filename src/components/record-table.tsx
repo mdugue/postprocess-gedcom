@@ -50,6 +50,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { setColumnVisible, useAppTable } from "@/lib/record-table";
 import type { Features, RecordTableMeta } from "@/lib/record-table";
+import type { Transformations } from "@/lib/transformations";
 
 interface RecordRow {
   id: string;
@@ -285,34 +286,28 @@ const SortControls = <T extends RecordRow>({
   );
 };
 
-export const RecordTable = <T extends RecordRow, C extends RowChange>({
-  applyChanges,
+export const RecordTable = <T extends RecordRow>({
   changes,
   columns,
-  data,
   meta,
   onSearchChange,
   search,
+  toRows,
 }: {
-  applyChanges: (data: T[], changes: Record<string, C>) => T[];
-  changes: Record<string, C>;
+  changes: Record<string, RowChange>;
   columns: TableOptions<Features, T>["columns"];
-  data: T[];
   meta: RecordTableMeta;
   onSearchChange: (search: string) => void;
   search: string;
+  toRows: (transformations: Transformations) => T[];
 }) => {
   const isMobile = useIsMobile();
 
-  // While a field has focus, sorting and filtering see the changes from before
-  // it, so a row does not move or vanish while it is being typed in.
-  const [frozenChanges, setFrozenChanges] = useState<Record<string, C>>();
-  const settledChanges = frozenChanges ?? changes;
-
-  const rows = useMemo(
-    () => applyChanges(data, settledChanges),
-    [applyChanges, data, settledChanges]
-  );
+  // While a field has focus, sorting and filtering see the state from before it,
+  // so a row does not move or vanish while it is being edited.
+  const [frozen, setFrozen] = useState<Transformations>();
+  const settled = frozen ?? meta.transformations;
+  const rows = useMemo(() => toRows(settled), [settled, toRows]);
 
   const table = useAppTable({
     columns,
@@ -371,14 +366,14 @@ export const RecordTable = <T extends RecordRow, C extends RowChange>({
       <div
         className="contents"
         onBlur={() => {
-          setFrozenChanges(undefined);
+          setFrozen(undefined);
         }}
         onFocus={({ currentTarget, target }) => {
           if (
             target.matches("input, select") &&
             currentTarget.contains(target)
           ) {
-            setFrozenChanges(changes);
+            setFrozen(meta.transformations);
           }
         }}
       >

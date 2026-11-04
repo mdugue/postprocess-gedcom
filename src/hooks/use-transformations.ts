@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { toast } from "@/components/ui/toast";
+import type { LinkRole } from "@/lib/family-links";
 import {
   emptyTransformations,
   mergeUpdate,
   omitKey,
   parseTransformationFile,
+  withFamilyLinks,
 } from "@/lib/transformations";
 import type {
   FamilyTransform,
@@ -127,6 +129,30 @@ export const useTransformations = () => {
           "Transformationen geladen",
           `${countTransformations(next)} Transformationen übernommen`
         );
+      },
+      setFamilyLinks: (
+        id: string,
+        role: LinkRole,
+        ids: string[],
+        sourceIds: string[],
+        hint: string
+      ) => {
+        setTransformations((current) => {
+          const next = withFamilyLinks(
+            current.families[id],
+            role,
+            ids,
+            sourceIds,
+            hint
+          );
+
+          return {
+            ...current,
+            families: next
+              ? { ...current.families, [id]: next }
+              : omitKey(current.families, id),
+          };
+        });
       },
       undo: (kind: RecordKind, id: string) => {
         restoreEntry(kind, id, undefined);

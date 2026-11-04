@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { LinkChange } from "@/lib/link-options";
 import type { FieldChange } from "@/lib/transformations";
 
 export const TransformationCard = ({
@@ -17,19 +18,23 @@ export const TransformationCard = ({
   hint,
   id,
   kind,
+  linkChanges,
   missing,
   onUndo,
   title,
   type,
+  warnings,
 }: {
   changes: FieldChange[];
   hint: string;
   id: string;
   kind: string;
+  linkChanges: LinkChange[];
   missing: boolean;
   onUndo: () => void;
   title: string;
   type: "delete" | "update";
+  warnings: string[];
 }) => (
   <Card
     size="sm"
@@ -57,7 +62,7 @@ export const TransformationCard = ({
         </IconButton>
       </CardAction>
     </CardHeader>
-    {!missing && changes.length > 0 && (
+    {!missing && changes.length + linkChanges.length + warnings.length > 0 && (
       <CardContent>
         <div className="flex flex-col gap-1 text-xs">
           {changes.map(({ field, from, to }) => (
@@ -66,6 +71,19 @@ export const TransformationCard = ({
               <ArrowRightIcon className="text-muted-foreground size-3" />
               <span className="text-success font-medium">{to}</span>
             </div>
+          ))}
+          {linkChanges.map(({ name, role, sign }) => (
+            <div key={`${sign}${role}${name}`}>
+              <span className={sign === "+" ? "text-success" : "text-removed"}>
+                {sign} {name}
+              </span>{" "}
+              <span className="text-muted-foreground">({role})</span>
+            </div>
+          ))}
+          {warnings.map((warning) => (
+            <p className="text-removed" key={warning}>
+              {warning}
+            </p>
           ))}
         </div>
       </CardContent>
