@@ -19,18 +19,17 @@ import {
 import type { Column, Table } from "@tanstack/react-table";
 
 import type { TransformationActions } from "@/hooks/use-transformations";
+import type { Gedcom } from "@/lib/gedcom";
 import { toDisplayDate } from "@/lib/transformations";
 import type { Transformations } from "@/lib/transformations";
 
 export interface RecordTableMeta {
   actions: TransformationActions;
+  gedcom: Gedcom | undefined;
   transformations: Transformations;
 }
 
-/**
- * Matches the displayed format, so dates match `12.06.1975` and not their raw form.
- * Compares source values: rows must not vanish while their pending edit is typed.
- */
+/** Matches the displayed format, so dates match `12.06.1975` and not their raw form. */
 const matchesDisplayedText = (
   row: { getValue: (columnId: string) => Date | string | undefined },
   columnId: string,
@@ -62,6 +61,8 @@ const features = tableFeatures({
 export type Features = typeof features;
 
 export const { createAppColumnHelper, useAppTable } = createTableHook({
+  // Edits change the data, which must not send the user back to the first page.
+  autoResetPageIndex: false,
   columnResizeMode: "onChange",
   // Many records lack dates, which must not push the dated ones out of view.
   defaultColumn: { sortUndefined: "last" },

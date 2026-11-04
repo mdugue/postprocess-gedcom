@@ -1,6 +1,7 @@
-import { format, isValid, parse } from "date-fns";
+import { format, isValid, parse, parseISO } from "date-fns";
 import { z } from "zod";
 
+import { exportSchema } from "@/lib/export-schema";
 import type { Family, Gedcom, Individual } from "@/lib/gedcom";
 
 const ISO_DATE_FORMAT = "yyyy-MM-dd";
@@ -106,6 +107,68 @@ export const effectiveDate = <K extends string>(
     ? (update[field] ?? undefined)
     : toIsoDate(original);
 
+/** The source text of an imprecise date, unless an edit has replaced or cleared it. */
+export const effectiveRawDate = <K extends string>(
+  update: Partial<Record<K, string | null>> | undefined,
+  field: K,
+  raw: string | undefined
+) => (update && field in update ? undefined : raw);
+
+const editedDate = <K extends string>(
+  update: Partial<Record<K, string | null>>,
+  field: K,
+  original: Date | undefined
+) => {
+  const iso = effectiveDate(update, field, original);
+
+  return iso === undefined ? undefined : parseISO(iso);
+};
+
+/** Records as the table should sort and filter them, with pending edits applied. */
+export const applyIndividualChanges = (
+  individuals: Individual[],
+  changes: Transformations["individuals"]
+) =>
+  individuals.map((individual) => {
+    const transform = changes[individual.id];
+
+    if (transform?.type !== "update") {
+      return individual;
+    }
+
+    const { data } = transform;
+
+    return {
+      ...individual,
+      birth: editedDate(data, "birth", individual.birth),
+      birthRaw: effectiveRawDate(data, "birth", individual.birthRaw),
+      death: editedDate(data, "death", individual.death),
+      deathRaw: effectiveRawDate(data, "death", individual.deathRaw),
+      name: data.name ?? individual.name,
+      sex: data.sex ?? individual.sex,
+    };
+  });
+
+export const applyFamilyChanges = (
+  families: Family[],
+  changes: Transformations["families"]
+) =>
+  families.map((family) => {
+    const transform = changes[family.id];
+
+    return transform?.type === "update"
+      ? {
+          ...family,
+          marriage: editedDate(transform.data, "marriage", family.marriage),
+          marriageRaw: effectiveRawDate(
+            transform.data,
+            "marriage",
+            family.marriageRaw
+          ),
+        }
+      : family;
+  });
+
 export interface FieldChange {
   field: string;
   from: string;
@@ -170,7 +233,9 @@ const exportIndividual = (
     ...individual,
     ...update,
     birth: effectiveDate(update, "birth", individual.birth),
+    birthRaw: effectiveRawDate(update, "birth", individual.birthRaw),
     death: effectiveDate(update, "death", individual.death),
+    deathRaw: effectiveRawDate(update, "death", individual.deathRaw),
     headOfFamilies: individual.headOfFamilies.filter(
       (id) => !isFamilyDeleted(id)
     ),
@@ -181,16 +246,17 @@ const exportFamily = (
   family: Family,
   transform: FamilyTransform | undefined,
   isDeleted: (id: string) => boolean
-) => ({
-  ...family,
-  children: family.children.filter((id) => !isDeleted(id)),
-  marriage: effectiveDate(
-    transform?.type === "update" ? transform.data : undefined,
-    "marriage",
-    family.marriage
-  ),
-  parents: family.parents.filter((id) => !isDeleted(id)),
-});
+) => {
+  const update = transform?.type === "update" ? transform.data : undefined;
+
+  return {
+    ...family,
+    children: family.children.filter((id) => !isDeleted(id)),
+    marriage: effectiveDate(update, "marriage", family.marriage),
+    marriageRaw: effectiveRawDate(update, "marriage", family.marriageRaw),
+    parents: family.parents.filter((id) => !isDeleted(id)),
+  };
+};
 
 /** Applies the transformations and removes references to deleted records. */
 export const buildExport = (
@@ -200,7 +266,7 @@ export const buildExport = (
   const isDeleted = (id: string) => individuals[id]?.type === "delete";
   const isFamilyDeleted = (id: string) => families[id]?.type === "delete";
 
-  return {
+  return exportSchema.parse({
     families: gedcom.families.flatMap((family) =>
       isFamilyDeleted(family.id)
         ? []
@@ -217,7 +283,7 @@ export const buildExport = (
             ),
           ]
     ),
-  };
+  });
 };
 
 const downloadFile = (content: string, filename: string) => {

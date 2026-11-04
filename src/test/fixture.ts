@@ -27,3 +27,5 @@ export const GEDCOM_FIXTURE = `0 HEAD
 2 DATE 12 JUN 1975
 0 TRLR
 `;
+
+export const toBuffer = (text: string) => new TextEncoder().encode(text).buffer;

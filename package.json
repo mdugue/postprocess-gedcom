@@ -8,25 +8,29 @@
     "build": "bun run build.ts",
     "preview": "bun --production src/index.html",
     "test": "bun test",
+    "test:e2e": "bun run build && bun --config=e2e/bunfig.toml test ./e2e/app.e2e.ts --timeout 30000",
+    "test:e2e:dev": "E2E_TARGET=dev bun --config=e2e/bunfig.toml test ./e2e/app.e2e.ts --timeout 30000",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix",
-    "knip": "knip"
+    "knip": "knip",
+    "schema": "bun run scripts/write-export-schema.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@fontsource-variable/inter": "^5.3.0",
     "@tanstack/react-table": "^9.3.1",
     "class-variance-authority": "^0.7.1",
+    "cmdk": "^1.1.1",
     "cn": "^0.5.2",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.68.0",
-    "parse-gedcom": "^2.0.1",
     "react": "^19.3.1",
     "react-day-picker": "^10.0.2",
     "react-dom": "^19.3.1",
     "react-dropzone": "^20.1.4",
     "react-resizable-panels": "^4.18.0",
+    "read-gedcom": "^0.3.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {

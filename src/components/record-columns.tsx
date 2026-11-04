@@ -11,7 +11,12 @@ import {
 import type { Family, Gedcom, Individual } from "@/lib/gedcom";
 import { createAppColumnHelper, getTableMeta } from "@/lib/record-table";
 import type { Features } from "@/lib/record-table";
-import { effectiveDate, toIsoDate } from "@/lib/transformations";
+import {
+  effectiveDate,
+  effectiveRawDate,
+  toDisplayDate,
+  toIsoDate,
+} from "@/lib/transformations";
 import type { IndividualUpdate } from "@/lib/transformations";
 
 const individualColumn = createAppColumnHelper<Individual>();
@@ -24,15 +29,23 @@ const ACTIONS_COLUMN_SIZE = 56;
 const SEX_OPTIONS = ["", "F", "M", "U"];
 
 const individualHint = ({ birth, name }: Individual) =>
-  birth ? `${name}, ${birth.toDateString()}` : name;
+  birth ? `${name}, ${toDisplayDate(birth)}` : name;
+
+const YEAR = /\d{4}/u;
+
+/** Imprecise dates sort by the year they mention. */
+const dateSortValue = (value: Date | string | undefined) =>
+  value instanceof Date
+    ? value.getTime()
+    : new Date(Number(value?.match(YEAR)?.[0] ?? 0), 0).getTime();
 
 const compareDates = <T extends object>(
   a: Row<Features, T>,
   b: Row<Features, T>,
   columnId: string
 ) =>
-  (a.getValue<Date | undefined>(columnId)?.getTime() ?? 0) -
-  (b.getValue<Date | undefined>(columnId)?.getTime() ?? 0);
+  dateSortValue(a.getValue<Date | string | undefined>(columnId)) -
+  dateSortValue(b.getValue<Date | string | undefined>(columnId));
 
 type IndividualCellProps = Pick<
   CellContext<Features, Individual>,
@@ -41,8 +54,12 @@ type IndividualCellProps = Pick<
 
 // Fields of a deleted record stay locked, since an edit would cancel the deletion.
 const pendingIndividual = ({ row, table }: IndividualCellProps) => {
-  const { actions, transformations } = getTableMeta(table);
-  const individual = row.original;
+  const { actions, gedcom, transformations } = getTableMeta(table);
+
+  // Rows carry applied edits for sorting; labels and hints name the source record.
+  const individual =
+    gedcom?.individualsById.get(row.original.id) ?? row.original;
+
   const pending = transformations.individuals[individual.id];
 
   return {
@@ -111,6 +128,7 @@ const IndividualDateCell = ({
       onChange={(value) => {
         update({ [field]: value });
       }}
+      rawValue={effectiveRawDate(pending, field, individual[`${field}Raw`])}
       value={effectiveDate(pending, field, individual[field])}
     />
   );
@@ -140,21 +158,23 @@ export const individualColumns = individualColumn.columns([
     header: "Geschlecht",
     size: 110,
   }),
-  individualColumn.accessor("birth", {
+  individualColumn.accessor(({ birth, birthRaw }) => birth ?? birthRaw, {
     cell: (context) => (
       <IndividualDateCell {...context} field="birth" label="Geburt" />
     ),
     filterFn: "matchesDisplayedText",
     header: "Geburt",
+    id: "birth",
     size: DATE_COLUMN_SIZE,
     sortFn: compareDates,
   }),
-  individualColumn.accessor("death", {
+  individualColumn.accessor(({ death, deathRaw }) => death ?? deathRaw, {
     cell: (context) => (
       <IndividualDateCell {...context} field="death" label="Tod" />
     ),
     filterFn: "matchesDisplayedText",
     header: "Tod",
+    id: "death",
     size: DATE_COLUMN_SIZE,
     sortFn: compareDates,
   }),
@@ -166,20 +186,24 @@ export const individualColumns = individualColumn.columns([
     size: 120,
   }),
   individualColumn.display({
-    cell: ({ row, table }) => (
-      <IconButton
-        label={`${row.original.name} löschen`}
-        onClick={() => {
-          getTableMeta(table).actions.markDeleted(
-            "individuals",
-            row.original.id,
-            individualHint(row.original)
-          );
-        }}
-      >
-        <TrashIcon />
-      </IconButton>
-    ),
+    cell: (context) => {
+      const { individual } = pendingIndividual(context);
+
+      return (
+        <IconButton
+          label={`${individual.name} löschen`}
+          onClick={() => {
+            getTableMeta(context.table).actions.markDeleted(
+              "individuals",
+              individual.id,
+              individualHint(individual)
+            );
+          }}
+        >
+          <TrashIcon />
+        </IconButton>
+      );
+    },
     enableHiding: false,
     header: "Aktionen",
     id: "actions",
@@ -209,8 +233,9 @@ const MarriageCell = ({
   gedcom: Gedcom;
 }) => {
   const { actions, transformations } = getTableMeta(table);
-  const family = row.original;
+  const family = gedcom.familiesById.get(row.original.id) ?? row.original;
   const pending = transformations.families[family.id];
+  const update = pending?.type === "update" ? pending.data : undefined;
 
   return (
     <DatePicker
@@ -223,11 +248,8 @@ const MarriageCell = ({
           familyHint(gedcom, family)
         );
       }}
-      value={effectiveDate(
-        pending?.type === "update" ? pending.data : undefined,
-        "marriage",
-        family.marriage
-      )}
+      rawValue={effectiveRawDate(update, "marriage", family.marriageRaw)}
+      value={effectiveDate(update, "marriage", family.marriage)}
     />
   );
 };
@@ -260,28 +282,37 @@ export const createFamilyColumns = (gedcom: Gedcom) =>
         size: 300,
       }
     ),
-    familyColumn.accessor("marriage", {
-      cell: (context) => <MarriageCell {...context} gedcom={gedcom} />,
-      enableColumnFilter: false,
-      header: "Hochzeit",
-      size: DATE_COLUMN_SIZE,
-      sortFn: compareDates,
-    }),
+    familyColumn.accessor(
+      ({ marriage, marriageRaw }) => marriage ?? marriageRaw,
+      {
+        cell: (context) => <MarriageCell {...context} gedcom={gedcom} />,
+        enableColumnFilter: false,
+        filterFn: "matchesDisplayedText",
+        header: "Hochzeit",
+        id: "marriage",
+        size: DATE_COLUMN_SIZE,
+        sortFn: compareDates,
+      }
+    ),
     familyColumn.display({
-      cell: ({ row, table }) => (
-        <IconButton
-          label={`${familyTitle(gedcom, row.original)} löschen`}
-          onClick={() => {
-            getTableMeta(table).actions.markDeleted(
-              "families",
-              row.original.id,
-              familyHint(gedcom, row.original)
-            );
-          }}
-        >
-          <TrashIcon />
-        </IconButton>
-      ),
+      cell: ({ row, table }) => {
+        const family = gedcom.familiesById.get(row.original.id) ?? row.original;
+
+        return (
+          <IconButton
+            label={`${familyTitle(gedcom, family)} löschen`}
+            onClick={() => {
+              getTableMeta(table).actions.markDeleted(
+                "families",
+                family.id,
+                familyHint(gedcom, family)
+              );
+            }}
+          >
+            <TrashIcon />
+          </IconButton>
+        );
+      },
       enableHiding: false,
       header: "Aktionen",
       id: "actions",

@@ -11,7 +11,7 @@ import {
   ChevronDownIcon,
   SearchIcon,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ColumnHeader } from "@/components/column-header";
 import { IconButton } from "@/components/icon-button";
@@ -285,27 +285,45 @@ const SortControls = <T extends RecordRow>({
   );
 };
 
-export const RecordTable = <T extends RecordRow>({
+export const RecordTable = <T extends RecordRow, C extends RowChange>({
+  applyChanges,
   changes,
   columns,
   data,
   meta,
+  onSearchChange,
+  search,
 }: {
-  changes: Record<string, RowChange>;
+  applyChanges: (data: T[], changes: Record<string, C>) => T[];
+  changes: Record<string, C>;
   columns: TableOptions<Features, T>["columns"];
   data: T[];
   meta: RecordTableMeta;
+  onSearchChange: (search: string) => void;
+  search: string;
 }) => {
   const isMobile = useIsMobile();
 
+  // While a field has focus, sorting and filtering see the changes from before
+  // it, so a row does not move or vanish while it is being typed in.
+  const [frozenChanges, setFrozenChanges] = useState<Record<string, C>>();
+  const settledChanges = frozenChanges ?? changes;
+
+  const rows = useMemo(
+    () => applyChanges(data, settledChanges),
+    [applyChanges, data, settledChanges]
+  );
+
   const table = useAppTable({
     columns,
-    data,
+    data: rows,
     initialState: INITIAL_STATE,
     meta,
+    state: { globalFilter: search },
   });
 
   const { pageIndex, pageSize } = table.state.pagination;
+  const pageCount = table.getPageCount();
 
   // Column filters have no controls on phones and must not stay active unseen.
   useEffect(() => {
@@ -313,6 +331,15 @@ export const RecordTable = <T extends RecordRow>({
       table.resetColumnFilters(true);
     }
   }, [isMobile, table]);
+
+  // Filtering after an edit can shrink the result below the current page.
+  useEffect(() => {
+    const lastPage = Math.max(pageCount - 1, 0);
+
+    if (pageIndex > lastPage) {
+      table.setPageIndex(lastPage);
+    }
+  }, [pageCount, pageIndex, table]);
 
   // The parts are direct items of the grid in the surrounding tabs, which keeps
   // the tab list, search and pagination aligned across both tables.
@@ -323,9 +350,11 @@ export const RecordTable = <T extends RecordRow>({
           <InputGroupInput
             aria-label="Alle Spalten durchsuchen"
             onChange={(event) => {
-              table.setGlobalFilter(event.target.value);
+              onSearchChange(event.target.value);
+              table.setPageIndex(0);
             }}
             placeholder="Suchen …"
+            value={search}
           />
           <InputGroupAddon>
             <SearchIcon />
@@ -339,18 +368,33 @@ export const RecordTable = <T extends RecordRow>({
       ) : (
         <ColumnsMenu table={table} />
       )}
-      {isMobile ? (
-        <RecordCards changes={changes} table={table} />
-      ) : (
-        <RecordGrid changes={changes} table={table} />
-      )}
+      <div
+        className="contents"
+        onBlur={() => {
+          setFrozenChanges(undefined);
+        }}
+        onFocus={({ currentTarget, target }) => {
+          if (
+            target.matches("input, select") &&
+            currentTarget.contains(target)
+          ) {
+            setFrozenChanges(changes);
+          }
+        }}
+      >
+        {isMobile ? (
+          <RecordCards changes={changes} table={table} />
+        ) : (
+          <RecordGrid changes={changes} table={table} />
+        )}
+      </div>
       <div className="col-span-full">
         <PaginationControls
           canNextPage={table.getCanNextPage()}
           canPreviousPage={table.getCanPreviousPage()}
           gotoPage={table.setPageIndex}
           nextPage={table.nextPage}
-          pageCount={table.getPageCount()}
+          pageCount={pageCount}
           pageIndex={pageIndex}
           pageSize={pageSize}
           previousPage={table.previousPage}
