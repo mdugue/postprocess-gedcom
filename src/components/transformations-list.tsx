@@ -12,7 +12,9 @@ import {
 } from "@/components/ui/input-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TransformationActions } from "@/hooks/use-transformations";
+import { createLinkGraph } from "@/lib/family-links";
 import type { Gedcom } from "@/lib/gedcom";
+import { describeLinkChanges, familyLinkWarnings } from "@/lib/link-options";
 import {
   describeChanges,
   matchesTransformation,
@@ -23,71 +25,94 @@ import type { Transformations } from "@/lib/transformations";
 const INDIVIDUAL_FIELDS = ["name", "sex", "birth", "death"] as const;
 const FAMILY_FIELDS = ["marriage"] as const;
 
+const hasLinkEdit = (transform: Transformations["families"][string]) =>
+  transform.type === "update" &&
+  (transform.data.parents !== undefined ||
+    transform.data.children !== undefined);
+
 const collectEntries = (
   actions: TransformationActions,
   gedcom: Gedcom | undefined,
-  { families, individuals }: Transformations
-) => [
-  ...Object.entries(individuals).map(([id, transform]) => {
-    const individual = gedcom?.individualsById.get(id);
+  transformations: Transformations
+) => {
+  const { families, individuals } = transformations;
+  const links = gedcom && createLinkGraph(gedcom, transformations);
 
-    return {
-      changes:
-        transform.type === "update"
-          ? describeChanges(
-              INDIVIDUAL_FIELDS,
-              individual && {
-                birth: toIsoDate(individual.birth) ?? individual.birthRaw,
-                death: toIsoDate(individual.death) ?? individual.deathRaw,
-                name: individual.name,
-                sex: individual.sex,
-              },
-              transform.data
-            )
-          : [],
-      hint: transform.hint,
-      id,
-      key: `individual-${id}`,
-      kind: "Person",
-      // Saved changes are shown before their GEDCOM is loaded; only then can one be orphaned.
-      missing: gedcom !== undefined && individual === undefined,
-      onUndo: () => {
-        actions.undo("individuals", id);
-      },
-      title:
-        individual?.name ??
-        (gedcom ? `Keine Person mit ID ${id}` : transform.hint),
-      type: transform.type,
-    };
-  }),
-  ...Object.entries(families).map(([id, transform]) => {
-    const family = gedcom?.familiesById.get(id);
-    const orphanTitle = gedcom ? `Keine Familie mit ID ${id}` : transform.hint;
+  return [
+    ...Object.entries(individuals).map(([id, transform]) => {
+      const individual = gedcom?.individualsById.get(id);
 
-    return {
-      changes:
-        transform.type === "update"
-          ? describeChanges(
-              FAMILY_FIELDS,
-              family && {
-                marriage: toIsoDate(family.marriage) ?? family.marriageRaw,
-              },
-              transform.data
-            )
-          : [],
-      hint: transform.hint,
-      id,
-      key: `family-${id}`,
-      kind: "Familie",
-      missing: gedcom !== undefined && family === undefined,
-      onUndo: () => {
-        actions.undo("families", id);
-      },
-      title: family ? familyTitle(gedcom, family) : orphanTitle,
-      type: transform.type,
-    };
-  }),
-];
+      return {
+        changes:
+          transform.type === "update"
+            ? describeChanges(
+                INDIVIDUAL_FIELDS,
+                individual && {
+                  birth: toIsoDate(individual.birth) ?? individual.birthRaw,
+                  death: toIsoDate(individual.death) ?? individual.deathRaw,
+                  name: individual.name,
+                  sex: individual.sex,
+                },
+                transform.data
+              )
+            : [],
+        hint: transform.hint,
+        id,
+        key: `individual-${id}`,
+        kind: "Person",
+        linkChanges: [],
+        // Saved changes are shown before their GEDCOM is loaded; only then can one be orphaned.
+        missing: gedcom !== undefined && individual === undefined,
+        onUndo: () => {
+          actions.undo("individuals", id);
+        },
+        title:
+          individual?.name ??
+          (gedcom ? `Keine Person mit ID ${id}` : transform.hint),
+        type: transform.type,
+        warnings: [],
+      };
+    }),
+    ...Object.entries(families).map(([id, transform]) => {
+      const family = gedcom?.familiesById.get(id);
+
+      const orphanTitle = gedcom
+        ? `Keine Familie mit ID ${id}`
+        : transform.hint;
+
+      return {
+        changes:
+          transform.type === "update"
+            ? describeChanges(
+                FAMILY_FIELDS,
+                family && {
+                  marriage: toIsoDate(family.marriage) ?? family.marriageRaw,
+                },
+                transform.data
+              )
+            : [],
+        hint: transform.hint,
+        id,
+        key: `family-${id}`,
+        kind: "Familie",
+        linkChanges:
+          family && links && transform.type === "update"
+            ? describeLinkChanges(links, family, transform.data)
+            : [],
+        missing: gedcom !== undefined && family === undefined,
+        onUndo: () => {
+          actions.undo("families", id);
+        },
+        title: family ? familyTitle(gedcom, family) : orphanTitle,
+        type: transform.type,
+        warnings:
+          gedcom && links && hasLinkEdit(transform)
+            ? familyLinkWarnings(links, gedcom, transformations, id)
+            : [],
+      };
+    }),
+  ];
+};
 
 export const TransformationsList = ({
   actions,

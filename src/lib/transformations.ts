@@ -2,6 +2,8 @@ import { format, isValid, parse, parseISO } from "date-fns";
 import { z } from "zod";
 
 import { exportSchema } from "@/lib/export-schema";
+import { createLinkGraph } from "@/lib/family-links";
+import type { LinkRole } from "@/lib/family-links";
 import type { Family, Gedcom, Individual } from "@/lib/gedcom";
 
 const ISO_DATE_FORMAT = "yyyy-MM-dd";
@@ -31,7 +33,11 @@ const individualUpdateSchema = z.object({
   sex: z.string().optional(),
 });
 
-const familyUpdateSchema = z.object({ marriage: z.iso.date().nullish() });
+const familyUpdateSchema = z.object({
+  children: z.array(z.string()).optional(),
+  marriage: z.iso.date().nullish(),
+  parents: z.array(z.string()).optional(),
+});
 
 const transformationsSchema = z.object({
   families: z
@@ -77,6 +83,33 @@ export const mergeUpdate = <T extends object>(
   hint,
   type: "update",
 });
+
+/**
+ * Sets a family's parents or children. A list back at its source state is no
+ * change anymore, so it leaves the update, and an update left empty is removed.
+ */
+export const withFamilyLinks = (
+  current: FamilyTransform | undefined,
+  role: LinkRole,
+  ids: string[],
+  sourceIds: string[],
+  hint: string
+): FamilyTransform | undefined => {
+  const isSource =
+    ids.length === sourceIds.length &&
+    ids.every((id, index) => id === sourceIds[index]);
+
+  if (!isSource) {
+    return mergeUpdate(current, { [role]: ids }, hint);
+  }
+
+  const { [role]: _removed, ...rest } =
+    current?.type === "update" ? current.data : {};
+
+  return Object.keys(rest).length > 0
+    ? { data: rest, hint, type: "update" }
+    : undefined;
+};
 
 export const omitKey = <T>(record: Record<string, T>, key: string) =>
   Object.fromEntries(
@@ -159,12 +192,14 @@ export const applyFamilyChanges = (
     return transform?.type === "update"
       ? {
           ...family,
+          children: transform.data.children ?? family.children,
           marriage: editedDate(transform.data, "marriage", family.marriage),
           marriageRaw: effectiveRawDate(
             transform.data,
             "marriage",
             family.marriageRaw
           ),
+          parents: transform.data.parents ?? family.parents,
         }
       : family;
   });
@@ -205,6 +240,7 @@ export const matchesTransformation = (
     hint: string;
     id: string;
     kind: string;
+    linkChanges: { name: string }[];
     title: string;
     type: keyof typeof TYPE_LABELS;
   },
@@ -217,6 +253,7 @@ export const matchesTransformation = (
     entry.hint,
     TYPE_LABELS[entry.type],
     ...entry.changes.flatMap(({ from, to }) => [from, to]),
+    ...entry.linkChanges.map(({ name }) => name),
   ]
     .join("\n")
     .toLowerCase()
@@ -225,7 +262,7 @@ export const matchesTransformation = (
 const exportIndividual = (
   individual: Individual,
   transform: IndividualTransform | undefined,
-  isFamilyDeleted: (id: string) => boolean
+  headOfFamilies: string[]
 ) => {
   const update = transform?.type === "update" ? transform.data : undefined;
 
@@ -236,9 +273,7 @@ const exportIndividual = (
     birthRaw: effectiveRawDate(update, "birth", individual.birthRaw),
     death: effectiveDate(update, "death", individual.death),
     deathRaw: effectiveRawDate(update, "death", individual.deathRaw),
-    headOfFamilies: individual.headOfFamilies.filter(
-      (id) => !isFamilyDeleted(id)
-    ),
+    headOfFamilies,
   };
 };
 
@@ -251,18 +286,22 @@ const exportFamily = (
 
   return {
     ...family,
-    children: family.children.filter((id) => !isDeleted(id)),
+    children: (update?.children ?? family.children).filter(
+      (id) => !isDeleted(id)
+    ),
     marriage: effectiveDate(update, "marriage", family.marriage),
     marriageRaw: effectiveRawDate(update, "marriage", family.marriageRaw),
-    parents: family.parents.filter((id) => !isDeleted(id)),
+    parents: (update?.parents ?? family.parents).filter((id) => !isDeleted(id)),
   };
 };
 
 /** Applies the transformations and removes references to deleted records. */
 export const buildExport = (
   gedcom: Gedcom,
-  { families, individuals }: Transformations
+  transformations: Transformations
 ) => {
+  const { families, individuals } = transformations;
+  const graph = createLinkGraph(gedcom, transformations);
   const isDeleted = (id: string) => individuals[id]?.type === "delete";
   const isFamilyDeleted = (id: string) => families[id]?.type === "delete";
 
@@ -279,7 +318,7 @@ export const buildExport = (
             exportIndividual(
               individual,
               individuals[individual.id],
-              isFamilyDeleted
+              graph.familiesAsParent(individual)
             ),
           ]
     ),

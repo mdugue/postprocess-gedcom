@@ -10,6 +10,7 @@ import {
   omitKey,
   parseDisplayDate,
   parseTransformationFile,
+  withFamilyLinks,
   toIsoDate,
 } from "@/lib/transformations";
 import type { Transformations } from "@/lib/transformations";
@@ -89,6 +90,51 @@ describe("buildExport", () => {
 
     expect(deleted.families).toEqual([]);
     expect(deleted.individuals[0]?.headOfFamilies).toEqual([]);
+  });
+});
+
+describe("family links", () => {
+  test("exports edited links on both sides", () => {
+    const { families, individuals } = buildExport(gedcom, {
+      families: {
+        "1": {
+          data: { children: [], parents: ["1", "3"] },
+          hint: "",
+          type: "update",
+        },
+      },
+      individuals: {},
+    });
+
+    expect(families[0]?.parents).toEqual(["1", "3"]);
+    expect(families[0]?.children).toEqual([]);
+    expect(individuals.map(({ headOfFamilies }) => headOfFamilies)).toEqual([
+      ["1"],
+      [],
+      ["1"],
+    ]);
+  });
+
+  test("withFamilyLinks drops lists back at their source state", () => {
+    const edited = withFamilyLinks(undefined, "children", [], ["3"], "h");
+
+    expect(edited).toEqual({
+      data: { children: [] },
+      hint: "h",
+      type: "update",
+    });
+    expect(
+      withFamilyLinks(edited, "children", ["3"], ["3"], "h")
+    ).toBeUndefined();
+    expect(
+      withFamilyLinks(
+        { data: { children: [], marriage: null }, hint: "h", type: "update" },
+        "children",
+        ["3"],
+        ["3"],
+        "h"
+      )
+    ).toEqual({ data: { marriage: null }, hint: "h", type: "update" });
   });
 });
 
@@ -177,6 +223,7 @@ describe("helpers", () => {
       hint: "Anna, 1950",
       id: "7",
       kind: "Person",
+      linkChanges: [],
       title: "Anna Muster",
       type: "update" as const,
     };
